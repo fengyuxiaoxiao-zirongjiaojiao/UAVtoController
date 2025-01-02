@@ -1,0 +1,492 @@
+/*
+ * @Author: vincent vincent_xjw@163.com
+ * @Date: 2024-12-28 21:52:35
+ * @LastEditors: vincent vincent_xjw@163.com
+ * @LastEditTime: 2024-12-29 16:58:21
+ * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.cpp
+ * @Description: 
+ */
+
+#include <stdint.h>
+#include <memory>
+#include <string.h>
+#include "CtrlCenter.hpp"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void uint64ToBeBytes(uint64_t number, uint8_t* bytes, int* index)
+{
+    // increment byte pointer for starting point
+    bytes += (*index) + 7;
+
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes--) = (uint8_t)(number);
+
+    (*index) += 8;
+}
+
+void uint64ToLeBytes(uint64_t number, uint8_t* bytes, int* index)
+{
+    // increment byte pointer for starting point
+    bytes += (*index);
+
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *bytes = (uint8_t)(number);
+
+    (*index) += 8;
+}
+
+void double64ToBeBytes(double number, uint8_t* bytes, int* index)
+{
+    union
+    {
+        double doubleValue;
+        uint64_t integerValue;
+    }field;
+
+    field.doubleValue = number;
+
+    uint64ToBeBytes(field.integerValue, bytes, index);
+}
+
+
+void double64ToLeBytes(double number, uint8_t* bytes, int* index)
+{
+    union
+    {
+        float doubleValue;
+        uint64_t integerValue;
+    }field;
+
+    field.doubleValue = number;
+
+    uint64ToLeBytes(field.integerValue, bytes, index);
+}
+
+double double64FromBeBytes(const uint8_t* bytes, int* index)
+{
+    union
+    {
+        double doubleValue;
+        uint64_t integerValue;
+    }field;
+
+    field.integerValue = uint64FromBeBytes(bytes, index);
+
+    return field.doubleValue;
+}
+
+double double64FromLeBytes(const uint8_t* bytes, int* index)
+{
+    union
+    {
+        double doubleValue;
+        uint64_t integerValue;
+    }field;
+
+    field.integerValue = uint64FromLeBytes(bytes, index);
+
+    return field.doubleValue;
+}
+
+uint64_t uint64FromBeBytes(const uint8_t* bytes, int* index)
+{
+    uint64_t number;
+
+    // increment byte pointer for starting point
+    bytes += *index;
+
+    number = *(bytes++);
+    number = (number << 8) | *(bytes++);
+    number = (number << 8) | *(bytes++);
+    number = (number << 8) | *(bytes++);
+    number = (number << 8) | *(bytes++);
+    number = (number << 8) | *(bytes++);
+    number = (number << 8) | *(bytes++);
+    number = (number << 8) | *bytes;
+
+    (*index) += 8;
+
+    return number;
+}
+
+uint64_t uint64FromLeBytes(const uint8_t* bytes, int* index)
+{
+    uint64_t number;
+
+    // increment byte pointer for starting point
+    bytes += (*index) + 7;
+
+    number = *(bytes--);
+    number = (number << 8) | *(bytes--);
+    number = (number << 8) | *(bytes--);
+    number = (number << 8) | *(bytes--);
+    number = (number << 8) | *(bytes--);
+    number = (number << 8) | *(bytes--);
+    number = (number << 8) | *(bytes--);
+    number = (number << 8) | *bytes;
+
+    (*index) += 8;
+
+    return number;
+}
+
+uint16_t uint16FromBeBytes(const uint8_t* bytes, int* index)
+{
+    uint16_t number;
+
+    // increment byte pointer for starting point
+    bytes += *index;
+
+    number = *(bytes++);
+    number = (number << 8) | *bytes;
+
+    (*index) += 2;
+
+    return number;
+}
+
+
+uint16_t uint16FromLeBytes(const uint8_t* bytes, int* index)
+{
+    uint16_t number;
+
+    // increment byte pointer for starting point
+    bytes += (*index) + 1;
+
+    number = *(bytes--);
+    number = (number << 8) | *bytes;
+
+    (*index) += 2;
+
+    return number;
+}
+
+int16_t int16FromBeBytes(const uint8_t* bytes, int* index)
+{
+    int16_t number;
+
+    // increment byte pointer for starting point
+    bytes += *index;
+
+    number = *(bytes++);
+    number = (number << 8) | *bytes;
+
+    (*index) += 2;
+
+    return number;
+}
+
+int16_t int16FromLeBytes(const uint8_t* bytes, int* index)
+{
+    int16_t number;
+
+    // increment byte pointer for starting point
+    bytes += (*index) + 1;
+
+    number = *(bytes--);
+    number = (number << 8) | *bytes;
+
+    (*index) += 2;
+
+    return number;
+}
+
+void ctrl_center_msg_position_pack(double longitude, double latitude, double altitude, ctrl_center_message_t &message)
+{
+    message.header = 0xAFAF;
+    message.lenght = sizeof(ctrl_center_position_t) + 7;
+    message.type = CTRL_CENTER_MSG_TYPE_POSITION;
+    int index = 0;
+#ifdef THIS_LITTLE_ENDIAN
+    double64ToLeBytes(longitude, message.payload + index, &index);
+    double64ToLeBytes(latitude, message.payload + index, &index);
+    double64ToLeBytes(altitude, message.payload + index, &index);
+#else
+    double64ToBeBytes(longitude, message.payload + index, &index);
+    double64ToBeBytes(latitude, message.payload + index, &index);
+    double64ToBeBytes(altitude, message.payload + index, &index);
+#endif
+    message.checkSum = 0;
+    message.tail = 0x193F;
+}
+
+int ctrl_center_msg_to_send_buffer(uint8_t *buf, const ctrl_center_message_t &message)
+{
+    int index = 0;
+    buf[index++] = message.header & 0xFF;
+    buf[index++] = (message.header >> 8) & 0xFF;
+    buf[index++] = message.lenght;
+    buf[index++] = message.type;
+    memcpy(buf+index, message.payload, message.lenght - 7);
+    index += message.lenght - 7;
+    buf[index++] = checkSum(buf + 1, index++);
+    buf[index++] = message.tail & 0xFF;
+    buf[index++] = (message.tail >> 8) & 0xFF;
+}
+
+// TODO:在这里补充其他打包函数
+
+
+// TODO： 在这下面添加解析函数
+bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_status_t &status)
+{
+    switch (status.state) {
+    case CTRL_CENTER_PARSE_STATE_UNINIT:
+    case CTRL_CENTER_PARSE_STATE_IDLE:
+    {
+        if (c == 0xAF) {
+            status.state = CTRL_CENTER_PARSE_STATE_GOT_STX1;
+            msg->lenght = 0;
+            msg->header = c;
+        }
+    }
+        break;
+    case CTRL_CENTER_PARSE_STATE_GOT_STX1:
+    {
+        if (c == 0xAF) {
+            status.state = CTRL_CENTER_PARSE_STATE_GOT_STX2;
+            msg->lenght = 0;
+            msg->header |= (c << 8) & 0xFF00;
+        } else {
+            status.state = CTRL_CENTER_PARSE_STATE_IDLE;
+        }
+    }
+        break;
+    case CTRL_CENTER_PARSE_STATE_GOT_STX2:
+    {
+        status.state = CTRL_CENTER_PARSE_STATE_GOT_LENGTH1;
+        status.pack_index = 0;
+        status.pack_len = 0;
+        msg->lenght = c;
+    }
+        break;
+    case CTRL_CENTER_PARSE_STATE_GOT_LENGTH1:
+    {
+        status.state = CTRL_CENTER_PARSE_STATE_GOT_LENGTH2;
+        msg->lenght |= (c << 8) & 0xFF00;
+        status.pack_index = 0;
+        status.pack_len = msg->lenght - 7;
+    }
+        break;
+    case CTRL_CENTER_PARSE_STATE_GOT_LENGTH2:
+    {
+        status.state = CTRL_CENTER_PARSE_STATE_GOT_MSGTYPE;
+        msg->type = c;
+    } break;
+    case CTRL_CENTER_PARSE_STATE_GOT_MSGTYPE:
+    {
+        if (status.pack_index < status.pack_len) {
+            msg->payload[status.pack_index++] = c;
+        }
+        if (status.pack_index == status.pack_len) {
+            status.state = CTRL_CENTER_PARSE_STATE_GOT_PAYLOAD;
+        }
+    } break;
+    case CTRL_CENTER_PARSE_STATE_GOT_PAYLOAD:
+    {
+        status.state = CTRL_CENTER_PARSE_STATE_GOT_CRC;
+        msg->checkSum = c;
+        uint8_t buf[261] = {0};
+        int len = status.pack_len + 2;
+        buf[0] = msg->lenght & 0xFF;
+        buf[1] = (msg->lenght >> 8) & 0xFF;
+        memcpy(buf+2, msg->payload, len);
+        uint8_t crc = checkSum(buf, len);
+        bool ok = (crc == msg->checkSum);
+        if (!ok) {
+            status.pack_len = 0;
+            status.pack_index = 0;
+            status.state = CTRL_CENTER_PARSE_STATE_IDLE;
+        }
+    } break;
+    case CTRL_CENTER_PARSE_STATE_GOT_CRC:
+    {
+        status.state = CTRL_CENTER_PARSE_STATE_GOT_TAIL1;
+        msg->tail = c;
+        if (c != 0x19) {
+            status.pack_len = 0;
+            status.pack_index = 0;
+            status.state = CTRL_CENTER_PARSE_STATE_IDLE;
+        }
+    } break;
+    case CTRL_CENTER_PARSE_STATE_GOT_TAIL1:
+    {
+        status.state = CTRL_CENTER_PARSE_STATE_GOT_TAIL1;
+        msg->tail |= (c << 8) & 0xFF00;
+        if (c == 0x3F) {
+            status.pack_len = 0;
+            status.pack_index = 0;
+            return true;
+        }
+        
+        status.state = CTRL_CENTER_PARSE_STATE_IDLE;
+    } break;
+    default: break;
+    }
+
+    return false;
+}
+
+#ifdef THIS_LITTLE_ENDIAN
+void ctrl_center_msg_command_long_decode(const ctrl_center_message_t* msg, ctrl_center_command_long_t* command_long)
+{
+    if (msg && command_long && msg->type == 0x04) {
+        int index = 0;
+        const uint8_t *buffer = msg->payload;
+        command_long->sequenceNumber = uint16FromLeBytes(buffer, &index);
+        command_long->timestamp = uint64FromLeBytes(buffer, &index);
+        command_long->mode = buffer[index++];
+        command_long->trackIsValid = buffer[index++];
+        
+        command_long->position_1.longitude = double64FromLeBytes(buffer, &index);
+        command_long->position_1.latitude = double64FromLeBytes(buffer, &index);
+        command_long->position_1.altitude = double64FromLeBytes(buffer, &index);
+        command_long->velocityNED_1.vx = int16FromLeBytes(buffer, &index);
+        command_long->velocityNED_1.vy = int16FromLeBytes(buffer, &index);
+        command_long->velocityNED_1.vz = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_1.accx = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_1.accy = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_1.accz = int16FromLeBytes(buffer, &index);
+        command_long->yaw_1 = uint16FromLeBytes(buffer, &index);
+        command_long->yawAngleSpeed_1 = int16FromLeBytes(buffer, &index);
+        command_long->trackId_1 = buffer[index++];
+
+        command_long->position_2.longitude = double64FromLeBytes(buffer, &index);
+        command_long->position_2.latitude = double64FromLeBytes(buffer, &index);
+        command_long->position_2.altitude = double64FromLeBytes(buffer, &index);
+        command_long->velocityNED_2.vx = int16FromLeBytes(buffer, &index);
+        command_long->velocityNED_2.vy = int16FromLeBytes(buffer, &index);
+        command_long->velocityNED_2.vz = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_2.accx = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_2.accy = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_2.accz = int16FromLeBytes(buffer, &index);
+        command_long->yaw_2 = uint16FromLeBytes(buffer, &index);
+        command_long->yawAngleSpeed_2 = int16FromLeBytes(buffer, &index);
+        command_long->trackId_2 = buffer[index++];
+
+        command_long->position_3.longitude = double64FromLeBytes(buffer, &index);
+        command_long->position_3.latitude = double64FromLeBytes(buffer, &index);
+        command_long->position_3.altitude = double64FromLeBytes(buffer, &index);
+        command_long->velocityNED_3.vx = int16FromLeBytes(buffer, &index);
+        command_long->velocityNED_3.vy = int16FromLeBytes(buffer, &index);
+        command_long->velocityNED_3.vz = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_3.accx = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_3.accy = int16FromLeBytes(buffer, &index);
+        command_long->accSpeed_3.accz = int16FromLeBytes(buffer, &index);
+        command_long->yaw_3 = uint16FromLeBytes(buffer, &index);
+        command_long->yawAngleSpeed_3 = int16FromLeBytes(buffer, &index);
+        command_long->trackId_3 = buffer[index++];
+
+        command_long->height = double64FromLeBytes(buffer, &index);
+        command_long->frontBackVelocity = int16FromLeBytes(buffer, &index);
+        command_long->leftRightVelocity = int16FromLeBytes(buffer, &index);
+        command_long->upDownVelocity = int16FromLeBytes(buffer, &index);
+        command_long->yawAngleSpeed_leftRight = int16FromLeBytes(buffer, &index);
+        command_long->emergencyCommand = buffer[index++];
+    }
+}
+#else
+void ctrl_center_msg_command_long_decode(const ctrl_center_message_t* msg, ctrl_center_command_long_t* command_long)
+{
+    if (msg && command_long && msg->type == 0x04) {
+        int index = 0;
+        const uint8_t *buffer = msg->payload;
+        command_long->sequenceNumber = uint16FromBeBytes(buffer, &index);
+        command_long->timestamp = uint64FromBeBytes(buffer, &index);
+        command_long->mode = buffer[index++];
+        command_long->trackIsValid = buffer[index++];
+        
+        command_long->position_1.longitude = double64FromBeBytes(buffer, &index);
+        command_long->position_1.latitude = double64FromBeBytes(buffer, &index);
+        command_long->position_1.altitude = double64FromBeBytes(buffer, &index);
+        command_long->velocityNED_1.vx = int16FromBeBytes(buffer, &index);
+        command_long->velocityNED_1.vy = int16FromBeBytes(buffer, &index);
+        command_long->velocityNED_1.vz = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_1.accx = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_1.accy = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_1.accz = int16FromBeBytes(buffer, &index);
+        command_long->yaw_1 = uint16FromBeBytes(buffer, &index);
+        command_long->yawAngleSpeed_1 = int16FromBeBytes(buffer, &index);
+        command_long->trackId_1 = buffer[index++];
+
+        command_long->position_2.longitude = double64FromBeBytes(buffer, &index);
+        command_long->position_2.latitude = double64FromBeBytes(buffer, &index);
+        command_long->position_2.altitude = double64FromBeBytes(buffer, &index);
+        command_long->velocityNED_2.vx = int16FromBeBytes(buffer, &index);
+        command_long->velocityNED_2.vy = int16FromBeBytes(buffer, &index);
+        command_long->velocityNED_2.vz = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_2.accx = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_2.accy = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_2.accz = int16FromBeBytes(buffer, &index);
+        command_long->yaw_2 = uint16FromBeBytes(buffer, &index);
+        command_long->yawAngleSpeed_2 = int16FromBeBytes(buffer, &index);
+        command_long->trackId_2 = buffer[index++];
+
+        command_long->position_3.longitude = double64FromBeBytes(buffer, &index);
+        command_long->position_3.latitude = double64FromBeBytes(buffer, &index);
+        command_long->position_3.altitude = double64FromBeBytes(buffer, &index);
+        command_long->velocityNED_3.vx = int16FromBeBytes(buffer, &index);
+        command_long->velocityNED_3.vy = int16FromBeBytes(buffer, &index);
+        command_long->velocityNED_3.vz = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_3.accx = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_3.accy = int16FromBeBytes(buffer, &index);
+        command_long->accSpeed_3.accz = int16FromBeBytes(buffer, &index);
+        command_long->yaw_3 = uint16FromBeBytes(buffer, &index);
+        command_long->yawAngleSpeed_3 = int16FromBeBytes(buffer, &index);
+        command_long->trackId_3 = buffer[index++];
+
+        command_long->height = double64FromBeBytes(buffer, &index);
+        command_long->frontBackVelocity = int16FromBeBytes(buffer, &index);
+        command_long->leftRightVelocity = int16FromBeBytes(buffer, &index);
+        command_long->upDownVelocity = int16FromBeBytes(buffer, &index);
+        command_long->yawAngleSpeed_leftRight = int16FromBeBytes(buffer, &index);
+        command_long->emergencyCommand = buffer[index++];
+    }
+}
+#endif
+
+uint8_t checkSum(const uint8_t *buf, int length)
+{
+    uint32_t sum = 0;
+
+    // 遍历每个字节，进行累加
+    for (size_t i = 0; i < length; i++) {
+        sum += buf[i];
+    }
+
+    // 将累加和取模 256，返回校验和
+    return (uint8_t)(sum & 0xFF);
+}
+
+#ifdef __cplusplus
+}
+#endif
