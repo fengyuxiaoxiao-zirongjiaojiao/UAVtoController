@@ -42,7 +42,6 @@ void UDPLink::writeData(const uint8_t *data, int length)
     ssize_t s = 0;
     if (isConnected()) {
         // 发送消息
-        std::string message = "Hello from Client!";
         s = sendto(_sockfd, data, length, MSG_CONFIRM, (const struct sockaddr *)&_serverAddr, sizeof(_serverAddr));
         std::cout << "客户端: 消息已发送" << s << std::endl;
     }

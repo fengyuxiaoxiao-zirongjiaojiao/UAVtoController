@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 21:52:35
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2024-12-29 16:58:21
+ * @LastEditTime: 2025-01-01 22:19:35
  * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.cpp
  * @Description: 
  */
@@ -90,6 +90,55 @@ void double64ToLeBytes(double number, uint8_t* bytes, int* index)
 
     uint64ToLeBytes(field.integerValue, bytes, index);
 }
+
+void uint16ToBeBytes(uint16_t number, uint8_t* bytes, int* index)
+{
+    // increment byte pointer for starting point
+    bytes += (*index) + 1;
+
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *bytes = (uint8_t)(number);
+
+    (*index) += 2;
+}
+
+void uint16ToLeBytes(uint16_t number, uint8_t* bytes, int* index)
+{
+    // increment byte pointer for starting point
+    bytes += (*index);
+
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *bytes = (uint8_t)(number);
+
+    (*index) += 2;
+}
+
+void int16ToBeBytes(int16_t number, uint8_t* bytes, int* index)
+{
+    // increment byte pointer for starting point
+    bytes += (*index) + 1;
+
+    *(bytes--) = (uint8_t)(number);
+    number = number >> 8;
+    *bytes = (uint8_t)(number);
+
+    (*index) += 2;
+}
+
+void int16ToLeBytes(int16_t number, uint8_t* bytes, int* index)
+{
+    // increment byte pointer for starting point
+    bytes += (*index);
+
+    *(bytes++) = (uint8_t)(number);
+    number = number >> 8;
+    *bytes = (uint8_t)(number);
+
+    (*index) += 2;
+}
+
 
 double double64FromBeBytes(const uint8_t* bytes, int* index)
 {
@@ -239,6 +288,72 @@ void ctrl_center_msg_position_pack(double longitude, double latitude, double alt
     message.tail = 0x193F;
 }
 
+void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_center_message_t &message)
+{
+    message.header = 0xAFAF;
+    message.lenght = sizeof(ctrl_center_sys_status_t) + 7;
+    message.type = CTRL_CENTER_MSG_TYPE_SYS_STATUS;
+    int index = 0;
+#ifdef THIS_LITTLE_ENDIAN
+    message.payload[index++] = sysStatus.rtkFixType;
+    double64ToLeBytes(sysStatus.position.longitude, message.payload + index, &index);
+    double64ToLeBytes(sysStatus.position.latitude, message.payload + index, &index);
+    double64ToLeBytes(sysStatus.position.altitude, message.payload + index, &index);
+    double64ToLeBytes(sysStatus.relativeAltitude, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.velocity.vx, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.velocity.vy, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.velocity.vz, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.accSpeed.accx, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.accSpeed.accy, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.accSpeed.accz, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.roll, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.pitch, message.payload + index, &index);
+    uint16ToLeBytes(sysStatus.yaw, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.angleVelocity.vx, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.angleVelocity.vy, message.payload + index, &index);
+    int16ToLeBytes(sysStatus.angleVelocity.vz, message.payload + index, &index);
+    message.payload[index++] = sysStatus.allSensorsHealthy;
+    message.payload[index++] = sysStatus.commandAck;
+#else
+    message.payload[index++] = sysStatus.rtkFixType;
+    double64ToBeBytes(sysStatus.position.longitude, message.payload + index, &index);
+    double64ToBeBytes(sysStatus.position.latitude, message.payload + index, &index);
+    double64ToBeBytes(sysStatus.position.altitude, message.payload + index, &index);
+    double64ToBeBytes(sysStatus.relativeAltitude, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.velocity.vx, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.velocity.vy, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.velocity.vz, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.accSpeed.accx, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.accSpeed.accy, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.accSpeed.accz, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.roll, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.pitch, message.payload + index, &index);
+    uint16BoLeBytes(sysStatus.yaw, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.angleVelocity.vx, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.angleVelocity.vy, message.payload + index, &index);
+    int16ToBeBytes(sysStatus.angleVelocity.vz, message.payload + index, &index);
+    message.payload[index++] = sysStatus.allSensorsHealthy;
+    message.payload[index++] = sysStatus.commandAck;
+#endif
+    message.checkSum = 0;
+    message.tail = 0x193F;
+}
+
+void ctrl_center_msg_power_pack(uint16_t power, ctrl_center_message_t &message)
+{
+    message.header = 0xAFAF;
+    message.lenght = sizeof(ctrl_center_power_t) + 7;
+    message.type = CTRL_CENTER_MSG_TYPE_POWER;
+    int index = 0;
+#ifdef THIS_LITTLE_ENDIAN
+    uint16ToLeBytes(power, message.payload + index, &index);
+#else
+    uint16ToBeBytes(power, message.payload + index, &index);
+#endif
+    message.checkSum = 0;
+    message.tail = 0x193F;
+}
+
 int ctrl_center_msg_to_send_buffer(uint8_t *buf, const ctrl_center_message_t &message)
 {
     int index = 0;
@@ -359,7 +474,7 @@ bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_s
 #ifdef THIS_LITTLE_ENDIAN
 void ctrl_center_msg_command_long_decode(const ctrl_center_message_t* msg, ctrl_center_command_long_t* command_long)
 {
-    if (msg && command_long && msg->type == 0x04) {
+    if (msg && command_long && msg->type == CTRL_CENTER_MSG_TYPE_COMMAND) {
         int index = 0;
         const uint8_t *buffer = msg->payload;
         command_long->sequenceNumber = uint16FromLeBytes(buffer, &index);
@@ -417,7 +532,7 @@ void ctrl_center_msg_command_long_decode(const ctrl_center_message_t* msg, ctrl_
 #else
 void ctrl_center_msg_command_long_decode(const ctrl_center_message_t* msg, ctrl_center_command_long_t* command_long)
 {
-    if (msg && command_long && msg->type == 0x04) {
+    if (msg && command_long && msg->type == CTRL_CENTER_MSG_TYPE_COMMAND) {
         int index = 0;
         const uint8_t *buffer = msg->payload;
         command_long->sequenceNumber = uint16FromBeBytes(buffer, &index);

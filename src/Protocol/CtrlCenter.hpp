@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 21:52:35
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2024-12-29 16:37:24
+ * @LastEditTime: 2025-01-01 22:44:06
  * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.hpp
  * @Description: 
  */
@@ -22,6 +22,11 @@ void uint64ToLeBytes(uint64_t number, uint8_t* bytes, int* index);
 void double64ToBeBytes(double number, uint8_t* bytes, int* index);
 void double64ToLeBytes(double number, uint8_t* bytes, int* index);
 
+void uint16ToBeBytes(uint16_t number, uint8_t* bytes, int* index);
+void uint16ToLeBytes(uint16_t number, uint8_t* bytes, int* index);
+void int16ToBeBytes(int16_t number, uint8_t* bytes, int* index);
+void int16ToLeBytes(int16_t number, uint8_t* bytes, int* index);
+
 double double64FromBeBytes(const uint8_t* bytes, int* index);
 double double64FromLeBytes(const uint8_t* bytes, int* index);
 uint64_t uint64FromBeBytes(const uint8_t* bytes, int* index);
@@ -38,7 +43,8 @@ int16_t int16FromLeBytes(const uint8_t* bytes, int* index);
 typedef enum _Protocol_type{
     CTRL_CENTER_MSG_TYPE_POSITION = 0x01,  // 位置信息
     CTRL_CENTER_MSG_TYPE_SYS_STATUS = 0x02, // 系统状态
-    CTRL_CENTER_MSG_TYPE_BATTERY = 0x03, // 能源
+    CTRL_CENTER_MSG_TYPE_POWER = 0x03,    // 能源
+    CTRL_CENTER_MSG_TYPE_COMMAND = 0x04     // 指控中心发往飞控的控制数据
 } CTRL_CENTER_MSG_TYPE;
 
 // 帧结构  所有数据采用小端字节序（低地址低字节）
@@ -52,7 +58,7 @@ typedef struct _Protocol_body {
 } ctrl_center_message_t;
 
 /// TODO ：在这下面添加负载结构体
-// 位置
+// 位置 0x01
 typedef struct __ctrl_center_position_t {
     double longitude;
     double latitude;
@@ -71,7 +77,28 @@ typedef struct __ctrl_center_accelerated_speed_t {
     int16_t accz;
 } ctrl_center_accelerated_speed_t;
 
-// 指控/自主→信息模块→飞控
+// 飞控→信息模块→指控/自主 0x02
+typedef struct __ctrl_center_sys_status_t {
+    uint8_t rtkFixType; // RTK状态
+    ctrl_center_position_t position; // 平台地理位置
+    double relativeAltitude;    // 相对起飞点高度×10，例如:123.4，会发送1234
+    ctrl_center_velocity_t velocity; // 平台运动速度 组帧时*100,解析时/100
+    ctrl_center_accelerated_speed_t accSpeed; // 平台加速度 组帧时*1000,解析时/1000
+    int16_t roll;   // 横滚角度 组帧时*100,解析时/100
+    int16_t pitch;  // 俯仰角度 组帧时*100,解析时/100
+    uint16_t yaw;   // 航向角度 组帧时*100,解析时/100
+    ctrl_center_velocity_t angleVelocity;   // 角速度 组帧时*100,解析时/100
+    uint8_t allSensorsHealthy = 0;  // 0无故障；其他故障码
+    uint8_t commandAck = 0;         // 命令接收状态 0x00-默认值 0x01-正常接收 0x02-未接收
+    uint8_t reserved[32];       // 预留 
+} ctrl_center_sys_status_t;
+
+// 飞控→信息模块→能源 0x03
+typedef struct __ctrl_center_power_t {
+    uint16_t power;     // 单位kw,  组帧时*100
+} ctrl_center_power_t;
+
+// 指控/自主→信息模块→飞控 0x04
 typedef struct __ctrl_center_command_long_t {
     uint16_t sequenceNumber;    // 时序  从0开始累加
     uint64_t timestamp;         // 时间戳
@@ -113,8 +140,11 @@ typedef struct __ctrl_center_command_long_t {
 /// TODO : 在这下面添加打包函数
 
 void ctrl_center_msg_position_pack(double longitude, double latitude, double altitude, ctrl_center_message_t &message);
-int ctrl_center_msg_to_send_buffer(uint8_t *buf, const ctrl_center_message_t &message);
+void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_center_message_t &message);
+void ctrl_center_msg_power_pack(uint16_t power, ctrl_center_message_t &message);
 // TODO:在这里补充其他打包函数
+int ctrl_center_msg_to_send_buffer(uint8_t *buf, const ctrl_center_message_t &message);
+
 
 // TODO： 在这下面添加解析函数
 typedef enum {
