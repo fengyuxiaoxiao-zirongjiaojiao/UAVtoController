@@ -11,6 +11,7 @@ set(SOURCE_FILES
     ${PROJECT_SOURCE_DIR}/src/Application.cpp
     ${PROJECT_SOURCE_DIR}/src/Comm/SerialLink.cpp
     ${PROJECT_SOURCE_DIR}/src/Protocol/ProtocolMavlink.cpp
+    ${PROJECT_SOURCE_DIR}/src/Protocol/ProtocolMavlinkFlightMode.cpp
     ${PROJECT_SOURCE_DIR}/src/Comm/UDPLink.cpp
     ${PROJECT_SOURCE_DIR}/src/Protocol/ProtocolCtrlCenter.cpp
     ${PROJECT_SOURCE_DIR}/src/Protocol/CtrlCenter.cpp

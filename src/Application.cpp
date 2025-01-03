@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:40:08
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-02 16:11:11
+ * @LastEditTime: 2025-01-03 15:37:26
  * @FilePath: /UAVtoController/src/Application.cpp
  * @Description: 
  */
@@ -20,7 +20,9 @@ Application::Application(int argc, char **argv) : ProtocolObserver()
 , _ctrlCenter(nullptr)
 , _udpLink(nullptr)
 {
+    memset(&_command_long, 0, sizeof(ctrl_center_command_long_t));
     _instance = this;
+    _bootTimeMs = getCurrentMs();
 }
 
 Application::~Application()
@@ -64,12 +66,19 @@ bool Application::init()
 void Application::quit()
 {
     _quit = true;
+    _isWorkThreadRunning = false;
+    if (_workThread.joinable()) {
+        _workThread.join();
+    }
+    while(!_isWorkThreadExited) { std::this_thread::sleep_for(std::chrono::milliseconds(200)); }
+
     if (_serialLink && _serialLink->isConnected()) {
         _serialLink->disconnectLink();
     }
     if (_udpLink && _udpLink->isConnected()) {
         _udpLink->disconnectLink();
     }
+
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 }
 
@@ -77,6 +86,11 @@ void Application::exec()
 {
     auto now = std::chrono::high_resolution_clock::now();
     auto last_heartbeat = now;
+
+    _isWorkThreadRunning = true;
+    _workThread = std::thread(&Application::_workThreadFunction, this, this);
+    _workThread.detach();
+
     _sendHeartbeat();
     while (!_quit) {
         now = std::chrono::high_resolution_clock::now();
@@ -89,6 +103,18 @@ void Application::exec()
             _sendHeartbeat();
         }
     }
+}
+
+FlightModeInterface *Application::createFlightModeInterface()
+{
+    if (isMultiRotor()) {
+        if (isArduPilotFirmwareClass()) {
+            return new ApmMultiRotorFlightMode();
+        } else if (isPX4FirmwareClass()) {
+            return new PX4MultiRotorFlightMode();
+        }
+    }
+    return nullptr;
 }
 
 void Application::onMavlinkMessageReceive(const mavlink_message_t &message)
@@ -156,6 +182,12 @@ void Application::onMavlinkMessageReceive(const mavlink_message_t &message)
     }
 }
 
+bool Application::isHeartbeatLost()
+{
+    if (getCurrentMs() - _lastReceiveHeartbeatTimeMS > 5000) return true;
+    return false;
+}
+
 void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &message)
 {
     std::cout << __func__ << " " << __LINE__ << std::endl;
@@ -165,32 +197,52 @@ void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &messag
     {
         ctrl_center_command_long_t command_long;
         ctrl_center_msg_command_long_decode(&message, &command_long);
+        _command_long = command_long;
         // TODO : 收到指控的数据后进行相应的处理
         if (command_long.mode == 0) {// 0-待机 
             // TODO
         } else if (command_long.mode == 1) {// 1-作战 
             // TODO
         } else if (command_long.mode == 2) {// 2-悬停
-            _setFlightMode("Loiter");
+            if (_flightModeInterface) {
+                _setFlightMode(_flightModeInterface->loiterMode());
+            }
         } else if (command_long.mode == 3) {// 3-一键起飞 
-            // TODO
+            _guidedTakeoff(10);
         } else if (command_long.mode == 4) {// 4-一键返航 
-            _setFlightMode("RTL");
+            if (_flightModeInterface) {
+                _setFlightMode(_flightModeInterface->rtlMode());
+            }
         } else if (command_long.mode == 5) {// 5-原地降落 
-            _setFlightMode("Land");
+            if (_flightModeInterface) {
+                _setFlightMode(_flightModeInterface->landMode());
+            }
         } else if (command_long.mode == 6) {// 6-自主巡航 
-            // TODO
+            // _workThreadFunction();
         } else if (command_long.mode == 7) {// 7-定高，需要发送高度信息
-            _setFlightMode("ALT_HOLD");
+            if (_flightModeInterface) {
+                _setFlightMode(_flightModeInterface->hoverMode());
+            }
         } else if (command_long.mode == 8) {// 8-遥操作模式
-            // TODO
+            if (_flightModeInterface) {
+                _setFlightMode(_flightModeInterface->stabilizedMode());
+            }
         }
+
     }
     break;
     
     default:
         break;
     }
+}
+
+uint64_t Application::getCurrentMs()
+{
+    auto now = std::chrono::system_clock::now();
+    auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+    auto value = now_ms.time_since_epoch().count();
+    return value;
 }
 
 void Application::_sendHeartbeat()
@@ -209,7 +261,7 @@ void Application::_setFlightMode(const std::string &mode)
     uint8_t     base_mode;
     uint32_t    custom_mode;
 
-    if (_flightModeDecode.setFlightMode(mode, base_mode, custom_mode)) {
+    if (_flightModeInterface && _flightModeInterface->setFlightMode(mode, base_mode, custom_mode)) {
         uint8_t newBaseMode = _base_mode & ~MAV_MODE_FLAG_DECODE_POSITION_CUSTOM_MODE;
 
         newBaseMode |= base_mode;
@@ -235,10 +287,55 @@ void Application::_requestDataStream(MAV_DATA_STREAM stream, uint16_t rate)
     }    
 }
 
+void Application::_sendMavCommand(MAV_CMD command, float param1, float param2, float param3, float param4, float param5, float param6, float param7)
+{
+    if (_serialLink && _serialLink->isConnected()) {
+        mavlink_message_t msg;
+        uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
+        mavlink_msg_command_long_pack(255, MAV_COMP_ID_MISSIONPLANNER, &msg, _targetSystemId, _targetComponentId, command, 0,
+                                        param1, param2, param3, param4, param5, param6, param7);
+        int len = mavlink_msg_to_send_buffer(buf, &msg);
+        _serialLink->writeData(buf, len);
+    } 
+}
+
+void Application::_guidedTakeoff(float relAltitude)
+{
+    if (!_flightModeInterface) return;
+
+    std::thread t([](Application *app, float alt) {
+        if (app->isMultiRotor()) {
+            if (app->isArduPilotFirmwareClass()) {
+                std::string guidedMode = app->_flightModeInterface->guidedMode();
+                while(app->_flightMode.compare(guidedMode) != 0) {
+                    app->_setFlightMode(guidedMode);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                while(!app->armed()) {
+                    app->setArmed(true);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
+                        -1,                                     // No pitch requested
+                        0, 0,                                   // param 2-4 unused
+                        NAN, NAN, NAN,                          // No yaw, lat, lon
+                        alt);
+            } else if (app->isPX4FirmwareClass()) {
+                app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
+                        -1,                                     // No pitch requested
+                        0, 0,                                   // param 2-4 unused
+                        NAN, NAN, NAN,                          // No yaw, lat, lon
+                        alt);
+            }
+        }
+    }, this, relAltitude); // 创建线程，传递 Lambda 表达式和参数
+    t.join(); // 等待线程完成
+}
+
 void Application::_handleHeartbeat(const mavlink_message_t &msg)
 {
     _receiveHeartbeat = true;
-
+    _lastReceiveHeartbeatTimeMS = getCurrentMs();
     static bool requestDataStream = false;
     if (_targetSystemId != msg.sysid || _targetComponentId != msg.compid) {
         _targetSystemId = msg.sysid;
@@ -268,14 +365,18 @@ void Application::_handleHeartbeat(const mavlink_message_t &msg)
     if (_firmwareType != heartbeat.autopilot || _vehicleType != heartbeat.type) {
         _firmwareType = heartbeat.autopilot;
         _vehicleType = heartbeat.type;
-        _flightModeDecode.init(_firmwareType, _vehicleType);
+        if (_flightModeInterface == nullptr) {
+            _flightModeInterface = createFlightModeInterface();
+        }
     }
 
     if (heartbeat.base_mode != _base_mode || heartbeat.custom_mode != _custom_mode) {
         _base_mode   = heartbeat.base_mode;
         _custom_mode = heartbeat.custom_mode;
-        _flightMode = _flightModeDecode.flightMode(_base_mode, _custom_mode);
-        std::cout << " flight mode changed: " << _flightMode << std::endl;
+        if (_flightModeInterface) {
+            _flightMode = _flightModeInterface->flightMode(_base_mode, _custom_mode);
+            std::cout << " flight mode changed: " << _flightMode << std::endl;
+        }
     }
 }
 
@@ -402,6 +503,88 @@ void Application::_sendBatteryInfoToCtrlCenter()
     if (_udpLink) {
         _udpLink->writeData(buf, length);
     }
+}
+
+void Application::_workThreadFunction(Application *app)
+{
+    _isWorkThreadExited = false;
+    while(_isWorkThreadRunning) {
+        if (isHeartbeatLost() && _command_long.mode == 6) {
+            double latitude = _command_long.position_1.latitude;
+            double longitude = _command_long.position_1.longitude;
+            double altitude = _command_long.position_1.altitude;
+            float vx = _command_long.velocityNED_1.vx / 100.0f;
+            float vy = _command_long.velocityNED_1.vy / 100.0f;
+            float vz = _command_long.velocityNED_1.vz / 100.0f;
+            float accx = _command_long.accSpeed_1.accx / 100.0f;
+            float accy = _command_long.accSpeed_1.accy / 100.0f;
+            float accz = _command_long.accSpeed_1.accz / 100.0f;
+            float yaw = (_command_long.yaw_1 / 100.0f) * (M_PI/180.0f);
+            float yawRate = (_command_long.yawAngleSpeed_1 / 100.0f) * (M_PI/180.0f);
+            if (app->isMultiRotor()) {
+                if (app->isArduPilotFirmwareClass()) {
+                    std::string guidedMode = app->_flightModeInterface->guidedMode();
+                    while(app->_flightMode.compare(guidedMode) != 0) {
+                        app->_setFlightMode(guidedMode);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                    while(!app->armed()) {
+                        app->setArmed(true);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                    while(app->_relativeAltitude < 10) {
+                        app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
+                            -1,                                     // No pitch requested
+                            0, 0,                                   // param 2-4 unused
+                            NAN, NAN, NAN,                          // No yaw, lat, lon
+                            10);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                    
+                } else if (app->isPX4FirmwareClass()) {
+                    std::string offboardMode = app->_flightModeInterface->guidedMode();
+                    while(app->_flightMode.compare(offboardMode) != 0) {
+                        app->_setFlightMode(offboardMode);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                    while(!app->armed()) {
+                        app->setArmed(true);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                    while(app->_relativeAltitude < 10) {
+                        app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
+                            -1,                                     // No pitch requested
+                            0, 0,                                   // param 2-4 unused
+                            NAN, NAN, NAN,                          // No yaw, lat, lon
+                            10);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                }
+
+                // set_position_target_global_int
+                if (_serialLink && _serialLink->isConnected()) {
+                    mavlink_message_t msg;
+                    uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
+                    uint32_t bootTimeMs = getCurrentMs() - _bootTimeMs;
+                    mavlink_msg_set_position_target_global_int_pack(255, MAV_COMP_ID_MISSIONPLANNER, &msg, bootTimeMs, 
+                        _targetSystemId, _targetComponentId, MAV_FRAME_GLOBAL_INT, 0,
+                        latitude * 1e7, longitude * 1e7, altitude, vx, vy, vz, accx, accy, accz, yaw, yawRate);
+                    int len = mavlink_msg_to_send_buffer(buf, &msg);
+                    _serialLink->writeData(buf, len);
+                }
+            }
+
+
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (_flightModeInterface) {
+        _setFlightMode(_flightModeInterface->pauseMode());
+    }
+
+    _isWorkThreadExited = true;
 }
 
 Application *Application::getInstance(void)
