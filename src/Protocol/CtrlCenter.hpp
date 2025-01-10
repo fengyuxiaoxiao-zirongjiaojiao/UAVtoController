@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 21:52:35
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-01 22:44:06
+ * @LastEditTime: 2025-01-03 20:37:11
  * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.hpp
  * @Description: 
  */
@@ -169,6 +169,9 @@ typedef struct __ctrl_center_status {
 } ctrl_center_status_t;
 
 bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_status_t &status);
+void ctrl_center_msg_position_decode(const ctrl_center_message_t* msg, ctrl_center_position_t* position);
+void ctrl_center_msg_sys_status_decode(const ctrl_center_message_t* msg, ctrl_center_sys_status_t* sys_status);
+void ctrl_center_msg_power_decode(const ctrl_center_message_t* msg, ctrl_center_power_t* power);
 void ctrl_center_msg_command_long_decode(const ctrl_center_message_t* msg, ctrl_center_command_long_t* command_long);
 
 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.10)
 project(uavToController)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -9,12 +9,15 @@ include_directories(libs/mavlink/ardupilotmega)
 set(SOURCE_FILES 
     ${PROJECT_SOURCE_DIR}/src/main.cpp
     ${PROJECT_SOURCE_DIR}/src/Application.cpp
+    ${PROJECT_SOURCE_DIR}/src/Logger.cpp
     ${PROJECT_SOURCE_DIR}/src/Comm/SerialLink.cpp
     ${PROJECT_SOURCE_DIR}/src/Protocol/ProtocolMavlink.cpp
     ${PROJECT_SOURCE_DIR}/src/Protocol/ProtocolMavlinkFlightMode.cpp
     ${PROJECT_SOURCE_DIR}/src/Comm/UDPLink.cpp
     ${PROJECT_SOURCE_DIR}/src/Protocol/ProtocolCtrlCenter.cpp
     ${PROJECT_SOURCE_DIR}/src/Protocol/CtrlCenter.cpp
+    ${PROJECT_SOURCE_DIR}/libs/inih/ini.c
+    ${PROJECT_SOURCE_DIR}/libs/inih/INIReader.cpp
 )
 
 # SerialPortTool
@@ -43,6 +46,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/src/Protocol
     ${PROJECT_SOURCE_DIR}/src/Comm
+    ${PROJECT_SOURCE_DIR}/libs/inih
 )
 
 set(Libraries

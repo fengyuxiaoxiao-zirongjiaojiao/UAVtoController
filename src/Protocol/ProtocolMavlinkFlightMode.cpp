@@ -1,5 +1,6 @@
 #include "ProtocolMavlinkFlightMode.hpp"
 #include "mavlink.h"
+#include "Logger.hpp"
 
 ApmMultiRotorFlightMode::ApmMultiRotorFlightMode()
 {
@@ -135,7 +136,7 @@ std::string PX4MultiRotorFlightMode::flightMode(uint8_t baseMode, uint32_t custo
         }
 
         if (!found) {
-            std::cout << "Unknown flight mode" << customMode << std::endl;
+            Logger::getInstance()->log(LOGLEVEL_WARNING, "Unknown flight mode:" + std::to_string(baseMode) + " " + std::to_string(customMode));
             return std::string("Unknown ") + std::to_string(baseMode) + std::to_string(customMode);
         }
     }

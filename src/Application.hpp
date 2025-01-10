@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:39:34
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-03 15:11:33
+ * @LastEditTime: 2025-01-05 17:31:11
  * @FilePath: /UAVtoController/src/Application.hpp
  * @Description: 
  */
@@ -15,6 +15,7 @@
 #include "ProtocolMavlinkFlightMode.hpp"
 #include "UDPLink.hpp"
 #include "ProtocolCtrlCenter.hpp"
+#include "Logger.hpp"
 
 class Application : public ProtocolObserver
 {
@@ -24,6 +25,9 @@ public:
 
     static Application *_instance;
     static Application *getInstance(void);
+
+    void loadSettings();
+    void saveSettings();
 
     bool init();
     void quit();
@@ -132,7 +136,7 @@ private:
 
     // 指控
     UDPLink *_udpLink;
-    std::string _argUdpServerIP = "192.168.0.101";//"127.0.0.1";
+    std::string _argUdpServerIP = "127.0.0.1";
     int _argUdpServerPort = 2001;
     int _argUdpLocalPort = 2002;
 

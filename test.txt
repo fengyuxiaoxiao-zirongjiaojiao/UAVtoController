@@ -1,0 +1,69 @@
+// #ifdef TEST
+//     uint8_t buf[CTRL_CENTER_MSG_FRAME_LEN_MAX] = {0};
+//     ctrl_center_message_t message;
+//     uint16_t power = 100;
+//     ctrl_center_msg_power_pack(power, message);
+//     int length = ctrl_center_msg_to_send_buffer(buf, message);
+//     printf("send %d:", length);
+//     for (int i = 0; i < length; i++) {
+//         printf("%02x ", buf[i]);
+//     }
+//     printf("\n");
+
+//     ctrl_center_message_t message_decode;
+//     ctrl_center_status_t status_decode;
+//     memset(&message_decode, 0, sizeof(ctrl_center_message_t));
+//     memset(&status_decode, 0, sizeof(ctrl_center_status_t));
+//     for(int i = 0; i < length; i++) {
+//         if (ctrl_center_parse_char(buf[i], &message_decode, status_decode)) {
+//             ctrl_center_power_t power_decode;
+//             ctrl_center_msg_power_decode(&message_decode, &power_decode);
+//             std::cout << "parse sucessful:" << power_decode.power << std::endl;
+//             if (power_decode.power != power) {
+//                 std::cout << "TEST failed. value not equal" << std::endl;
+//             } else {
+//                 std::cout << "TEST sucessful." << std::endl;
+//             }
+//         }
+//     }
+    
+// #endif
+
+// #ifdef TEST
+//     double td = 100.123;
+//     uint8_t b[16] = {0};
+//     int index = 0;
+//     double64ToLeBytes(td, b, &index);
+
+//     index = 0;
+//     double od = double64FromLeBytes(b, &index);
+
+
+//     uint8_t buf[CTRL_CENTER_MSG_FRAME_LEN_MAX] = {0};
+//     ctrl_center_message_t message;
+//     ctrl_center_msg_position_pack(100, 200, 50, message);
+//     int length = ctrl_center_msg_to_send_buffer(buf, message);
+//     printf("send %d:", length);
+//     for (int i = 0; i < length; i++) {
+//         printf("%02x ", buf[i]);
+//     }
+//     printf("\n");
+
+//     ctrl_center_message_t message_decode;
+//     ctrl_center_status_t status_decode;
+//     memset(&message_decode, 0, sizeof(ctrl_center_message_t));
+//     memset(&status_decode, 0, sizeof(ctrl_center_status_t));
+//     for(int i = 0; i < length; i++) {
+//         if (ctrl_center_parse_char(buf[i], &message_decode, status_decode)) {
+//             ctrl_center_position_t positioin_decode;
+//             ctrl_center_msg_position_decode(&message_decode, &positioin_decode);
+//             std::cout << "parse sucessful:" << positioin_decode.longitude << " " << positioin_decode.latitude << " " << positioin_decode.altitude << std::endl;
+//             if (positioin_decode.longitude != 100) {
+//                 std::cout << "TEST failed. value not equal" << std::endl;
+//             } else {
+//                 std::cout << "TEST sucessful." << std::endl;
+//             }
+//         }
+//     }
+    
+// #endif

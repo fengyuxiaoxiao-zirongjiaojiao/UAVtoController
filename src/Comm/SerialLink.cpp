@@ -1,17 +1,18 @@
 #include "SerialLink.hpp"
 #include <iostream>
+#include "Logger.hpp"
 
 std::mutex SerialLink::_mutex;
 
 SerialLink::SerialLink(ProtocolInterface *protocol) : _protocol(protocol)
 {
-    std::cout << __FILE__ << " " << __func__ << " " << __LINE__ << std::endl;
+    Logger::getInstance()->log(LOGLEVEL_DEBUG, "");
     m_SerialPort.connectReadEvent(this);
 }
 
 SerialLink::~SerialLink()
 {
-    std::cout << __FILE__ << " " << __func__ << " " << __LINE__ << std::endl;
+    Logger::getInstance()->log(LOGLEVEL_DEBUG, "");
     _protocol = nullptr;
     disconnectLink();
 }
@@ -28,10 +29,10 @@ bool SerialLink::open(const std::string &portName, int baudrate, itas109::Parity
 
     if (m_SerialPort.open())
     {
-        std::cout << "serial open success[" << portName << "] rate:" << baudrate << std::endl;
+        Logger::getInstance()->log(LOGLEVEL_INFO, "Serial open success[" + portName + "] rate:" + std::to_string(baudrate));
         return true;
     }
-    std::cout << "serial open failed[" << portName << "] " << m_SerialPort.getLastError() << " - " << m_SerialPort.getLastErrorMsg() << std::endl;
+    Logger::getInstance()->log(LOGLEVEL_ERROR, "Serial open failed[" + portName + "] " + std::to_string(m_SerialPort.getLastError()) + " - " + m_SerialPort.getLastErrorMsg());
     return false;
 }
 

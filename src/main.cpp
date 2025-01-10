@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:32:00
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2024-12-28 13:36:02
+ * @LastEditTime: 2025-01-05 15:22:05
  * @FilePath: /UAVtoController/src/main.cc
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -13,7 +13,7 @@
 
 static void signalCapture(int signal)
 {
-    std::cout << __func__ << " " << signal << std::endl;
+    Logger::getInstance()->log(LOGLEVEL_INFO, "Application capture a signal:" + std::to_string(signal));
     Application::getInstance()->quit();
 }
 
@@ -24,9 +24,10 @@ int main(int argc, char **argv)
     signal(SIGINT, signalCapture);
     Application app(argc, argv);
     if (app.init()) {
+        Logger::getInstance()->log(LOGLEVEL_INFO, "Application init.");
         app.exec();
     }
 
-    std::cout << "Application exit done." << std::endl;
+    Logger::getInstance()->log(LOGLEVEL_INFO, "Application exit done.");
     return 0;
 }

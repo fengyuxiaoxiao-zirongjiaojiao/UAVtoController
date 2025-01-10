@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:40:08
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-03 15:37:26
+ * @LastEditTime: 2025-01-05 17:31:22
  * @FilePath: /UAVtoController/src/Application.cpp
  * @Description: 
  */
@@ -11,6 +11,7 @@
 #include <thread>
 #include <chrono>
 #include <cmath>
+#include "INIReader.h"
 
 Application* Application::_instance = nullptr;
 
@@ -48,8 +49,63 @@ Application::~Application()
     }
 }
 
+void Application::loadSettings()
+{
+    // 创建INIReader对象并加载配置文件
+    const char* home_dir = std::getenv("HOME");
+    std::string fileName = std::string(home_dir) + "/.config/uavToController.ini";
+    INIReader reader(fileName);
+
+    // 检查文件是否被正确加载
+    if (reader.ParseError() < 0) {
+        std::cerr << "无法加载INI文件" << std::endl;
+        saveSettings();
+        return;
+    }
+
+    // 读取数据库相关参数
+    _argSerialPort = reader.GetString("COMM","SerialPort", "/dev/ttyS0");
+    _argBaudRate = reader.GetInteger("COMM","SerialRate", 115200);
+    _argUdpServerIP = reader.GetString("COMM","UdpHost", "127.0.0.1");
+    _argUdpServerPort = reader.GetInteger("COMM","UdpPort", 2001);
+    int level = reader.GetInteger("LOG","LEVEL", 1);
+    Logger::getInstance()->setLogLevel((LogLevel)level);
+
+    Logger::getInstance()->log(LOGLEVEL_INFO, "SerialPort:" + _argSerialPort + " SerialRate:" + std::to_string(_argBaudRate) + 
+                                                " UdpHost:" + _argUdpServerIP + " UdpPort:" + std::to_string(_argUdpServerPort) + 
+                                                " LogLevel:" + std::to_string(level));
+}
+
+void Application::saveSettings()
+{
+    const char* home_dir = std::getenv("HOME");
+    std::string fileName = std::string(home_dir) + "/.config/uavToController.ini";
+
+    std::ofstream iniFile(fileName);
+
+    if (!iniFile.is_open()) {
+        std::cerr << "无法打开INI文件进行写入!" << std::endl;
+        return;
+    }
+
+    // 写入数据库配置
+    iniFile << "[COMM]" << std::endl;
+    iniFile << "SerialPort = " << _argSerialPort << std::endl;
+    iniFile << "SerialRate = " << _argBaudRate << std::endl;
+    iniFile << "UdpHost = " << _argUdpServerIP << std::endl;
+    iniFile << "UdpPort = " << _argUdpServerPort << std::endl;
+
+    iniFile << "[LOG]" << std::endl;
+    iniFile << "LEVEL = " << Logger::getInstance()->logLevel() << std::endl;
+
+    iniFile.close();
+    std::cout << "配置已更新并写回到INI文件!" << std::endl;
+}
+
 bool Application::init()
 {
+    loadSettings();
+
     _mavlink = new ProtocolMavlink(this);
     _serialLink = new SerialLink(_mavlink);
 
@@ -65,6 +121,8 @@ bool Application::init()
 
 void Application::quit()
 {
+    saveSettings();
+
     _quit = true;
     _isWorkThreadRunning = false;
     if (_workThread.joinable()) {
@@ -120,7 +178,7 @@ FlightModeInterface *Application::createFlightModeInterface()
 void Application::onMavlinkMessageReceive(const mavlink_message_t &message)
 {
     if (message.sysid == 255) return;
-    std::cout << "msgid:" << message.msgid << std::endl;
+    Logger::getInstance()->log(LOGLEVEL_DEBUG, "msgid:" + std::to_string(message.msgid));
     switch (message.msgid)
     {
     case MAVLINK_MSG_ID_HEARTBEAT:
@@ -190,7 +248,6 @@ bool Application::isHeartbeatLost()
 
 void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &message)
 {
-    std::cout << __func__ << " " << __LINE__ << std::endl;
     switch (message.type)
     {
     case CTRL_CENTER_MSG_TYPE_COMMAND:
@@ -375,7 +432,7 @@ void Application::_handleHeartbeat(const mavlink_message_t &msg)
         _custom_mode = heartbeat.custom_mode;
         if (_flightModeInterface) {
             _flightMode = _flightModeInterface->flightMode(_base_mode, _custom_mode);
-            std::cout << " flight mode changed: " << _flightMode << std::endl;
+            Logger::getInstance()->log(LOGLEVEL_INFO, "flight mode changed: " + _flightMode);
         }
     }
 }
@@ -509,7 +566,7 @@ void Application::_workThreadFunction(Application *app)
 {
     _isWorkThreadExited = false;
     while(_isWorkThreadRunning) {
-        if (isHeartbeatLost() && _command_long.mode == 6) {
+        if (!isHeartbeatLost() && _command_long.mode == 6) {
             double latitude = _command_long.position_1.latitude;
             double longitude = _command_long.position_1.longitude;
             double altitude = _command_long.position_1.altitude;
@@ -522,45 +579,24 @@ void Application::_workThreadFunction(Application *app)
             float yaw = (_command_long.yaw_1 / 100.0f) * (M_PI/180.0f);
             float yawRate = (_command_long.yawAngleSpeed_1 / 100.0f) * (M_PI/180.0f);
             if (app->isMultiRotor()) {
-                if (app->isArduPilotFirmwareClass()) {
-                    std::string guidedMode = app->_flightModeInterface->guidedMode();
-                    while(app->_flightMode.compare(guidedMode) != 0) {
-                        app->_setFlightMode(guidedMode);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                    while(!app->armed()) {
-                        app->setArmed(true);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                    while(app->_relativeAltitude < 10) {
-                        app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
-                            -1,                                     // No pitch requested
-                            0, 0,                                   // param 2-4 unused
-                            NAN, NAN, NAN,                          // No yaw, lat, lon
-                            10);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                    
-                } else if (app->isPX4FirmwareClass()) {
-                    std::string offboardMode = app->_flightModeInterface->guidedMode();
-                    while(app->_flightMode.compare(offboardMode) != 0) {
-                        app->_setFlightMode(offboardMode);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                    while(!app->armed()) {
-                        app->setArmed(true);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                    while(app->_relativeAltitude < 10) {
-                        app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
-                            -1,                                     // No pitch requested
-                            0, 0,                                   // param 2-4 unused
-                            NAN, NAN, NAN,                          // No yaw, lat, lon
-                            10);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
+                std::string guidedMode = app->_flightModeInterface->guidedMode();
+                while(app->_flightMode.compare(guidedMode) != 0) {
+                    app->_setFlightMode(guidedMode);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
-
+                while(!app->armed()) {
+                    app->setArmed(true);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                while(app->_relativeAltitude < 10) {
+                    app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
+                        -1,                                     // No pitch requested
+                        0, 0,                                   // param 2-4 unused
+                        NAN, NAN, NAN,                          // No yaw, lat, lon
+                        10);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                
                 // set_position_target_global_int
                 if (_serialLink && _serialLink->isConnected()) {
                     mavlink_message_t msg;
