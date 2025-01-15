@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:40:08
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-05 17:31:22
+ * @LastEditTime: 2025-01-15 12:03:20
  * @FilePath: /UAVtoController/src/Application.cpp
  * @Description: 
  */
@@ -233,6 +233,11 @@ void Application::onMavlinkMessageReceive(const mavlink_message_t &message)
     case MAVLINK_MSG_ID_POSITION_TARGET_LOCAL_NED:
     {
         _handlePositionTargetLocalNED(message);
+    }
+    break;
+    case MAVLINK_MSG_ID_HIL_STATE_QUATERNION:
+    {
+        _handleHilStateQuateRnion(message);
     }
     break;
     default:
@@ -496,15 +501,24 @@ void Application::_handleRawIMU(const mavlink_message_t &msg)
 
 void Application::_handlePositionTargetLocalNED(const mavlink_message_t &msg)
 {
-    mavlink_position_target_local_ned_t positionTargetLocalNED;
-    mavlink_msg_position_target_local_ned_decode(&msg, &positionTargetLocalNED);
-    _acceleratedSpeed_x = positionTargetLocalNED.afx;
-    _acceleratedSpeed_y = positionTargetLocalNED.afy;
-    _acceleratedSpeed_z = positionTargetLocalNED.afz;
+    // mavlink_position_target_local_ned_t positionTargetLocalNED;
+    // mavlink_msg_position_target_local_ned_decode(&msg, &positionTargetLocalNED);
+    // _acceleratedSpeed_x = positionTargetLocalNED.afx;
+    // _acceleratedSpeed_y = positionTargetLocalNED.afy;
+    // _acceleratedSpeed_z = positionTargetLocalNED.afz;
 
     // _velocityNED_x = positionTargetLocalNED.vx;
     // _velocityNED_y = positionTargetLocalNED.vy;
     // _velocityNED_z = positionTargetLocalNED.vz;
+}
+
+void Application::_handleHilStateQuateRnion(const mavlink_message_t &msg)
+{
+    mavlink_hil_state_quaternion_t hil;
+    mavlink_msg_hil_state_quaternion_decode(&msg, &hil);
+    _acceleratedSpeed_x = hil.xacc;
+    _acceleratedSpeed_y = hil.yacc;
+    _acceleratedSpeed_z = hil.zacc;
 }
 
 // TODO : 发送给指控的函数在下面添加

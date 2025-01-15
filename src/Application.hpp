@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:39:34
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-05 17:31:11
+ * @LastEditTime: 2025-01-15 12:00:07
  * @FilePath: /UAVtoController/src/Application.hpp
  * @Description: 
  */
@@ -73,6 +73,8 @@ private:
     void _handleLocalPositionNED(const mavlink_message_t &msg);
     void _handleRawIMU(const mavlink_message_t &msg);
     void _handlePositionTargetLocalNED(const mavlink_message_t &msg);
+    void _handleHilStateQuateRnion(const mavlink_message_t &msg);
+    
     // 指控
     void _sendPositionTOCtrlCenter();
     void _sendSysStatusTOCtrlCenter();
