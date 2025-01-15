@@ -252,6 +252,7 @@ void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &messag
     {
     case CTRL_CENTER_MSG_TYPE_COMMAND:
     {
+        _commandAck = 0x01;
         ctrl_center_command_long_t command_long;
         ctrl_center_msg_command_long_decode(&message, &command_long);
         _command_long = command_long;
@@ -290,6 +291,7 @@ void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &messag
     break;
     
     default:
+        _commandAck = 0x02;
         break;
     }
 }
@@ -545,7 +547,7 @@ void Application::_sendSysStatusTOCtrlCenter()
         _udpLink->writeData(buf, length);
     }
 
-    _commandAck = 0;
+    _commandAck = 0x00;
 }
 
 void Application::_sendBatteryInfoToCtrlCenter()
