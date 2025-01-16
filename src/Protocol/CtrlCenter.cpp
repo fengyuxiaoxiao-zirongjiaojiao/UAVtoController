@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 21:52:35
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-03 22:25:34
+ * @LastEditTime: 2025-01-16 18:35:05
  * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.cpp
  * @Description: 
  */
@@ -314,7 +314,6 @@ void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_ce
     int16ToLeBytes(sysStatus.angleVelocity.vz, message.payload, &index);
     message.payload[index++] = sysStatus.allSensorsHealthy;
     message.payload[index++] = sysStatus.commandAck;
-    memcpy(&message.payload[index], &sysStatus.reserved[0], 32);
 #else
     message.payload[index++] = sysStatus.rtkFixType;
     double64ToBeBytes(sysStatus.position.longitude, message.payload, &index);
@@ -335,7 +334,6 @@ void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_ce
     int16ToBeBytes(sysStatus.angleVelocity.vz, message.payload, &index);
     message.payload[index++] = sysStatus.allSensorsHealthy;
     message.payload[index++] = sysStatus.commandAck;
-    memcpy(&message.payload[index], &sysStatus.reserved[0], 32);
 #endif
     message.checkSum = 0;
     message.tail = 0x3F19;
@@ -455,7 +453,7 @@ bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_s
     {
         status.state = CTRL_CENTER_PARSE_STATE_GOT_TAIL1;
         msg->tail = c;
-        if (c != 0x3F) {
+        if (c != 0x19) {
             status.pack_len = 0;
             status.pack_index = 0;
             status.state = CTRL_CENTER_PARSE_STATE_IDLE;
@@ -465,7 +463,7 @@ bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_s
     {
         status.state = CTRL_CENTER_PARSE_STATE_GOT_TAIL1;
         msg->tail |= (c << 8) & 0xFF00;
-        if (c == 0x19) {
+        if (c == 0x3F) {
             status.pack_len = 0;
             status.pack_index = 0;
             return true;

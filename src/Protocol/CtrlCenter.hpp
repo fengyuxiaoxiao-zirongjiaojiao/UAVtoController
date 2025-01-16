@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 21:52:35
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-16 17:02:08
+ * @LastEditTime: 2025-01-16 18:41:05
  * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.hpp
  * @Description: 
  */
@@ -37,7 +37,7 @@ uint16_t uint16FromLeBytes(const uint8_t* bytes, int* index);
 int16_t int16FromBeBytes(const uint8_t* bytes, int* index);
 int16_t int16FromLeBytes(const uint8_t* bytes, int* index);
 
-#define CTRL_CENTER_MSG_PAYLOAD_LEN_MAX   128
+#define CTRL_CENTER_MSG_PAYLOAD_LEN_MAX   256
 #define CTRL_CENTER_MSG_FRAME_LEN_MAX   (CTRL_CENTER_MSG_PAYLOAD_LEN_MAX + 7)
 
 typedef enum _Protocol_type{
