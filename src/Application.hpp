@@ -114,8 +114,8 @@ private:
     // 位置信息
     double _latitude = 0; // 纬度
     double _longitude = 0; // 经度
-    float _altitude = 0; // 绝对高度
-    float _relativeAltitude = 0; // 相对高度
+    double _altitude = 0; // 绝对高度
+    double _relativeAltitude = 0; // 相对高度
     // 姿态信息
     float _pitch = 0; // 俯仰
     float _roll = 0;  // 横滚

@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:40:08
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-15 12:03:20
+ * @LastEditTime: 2025-01-16 11:46:59
  * @FilePath: /UAVtoController/src/Application.cpp
  * @Description: 
  */
@@ -20,6 +20,7 @@ Application::Application(int argc, char **argv) : ProtocolObserver()
 , _serialLink(nullptr)
 , _ctrlCenter(nullptr)
 , _udpLink(nullptr)
+, _flightModeInterface(nullptr)
 {
     memset(&_command_long, 0, sizeof(ctrl_center_command_long_t));
     _instance = this;
@@ -257,7 +258,6 @@ void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &messag
     {
     case CTRL_CENTER_MSG_TYPE_COMMAND:
     {
-        _commandAck = 0x01;
         ctrl_center_command_long_t command_long;
         ctrl_center_msg_command_long_decode(&message, &command_long);
         _command_long = command_long;
@@ -296,7 +296,6 @@ void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &messag
     break;
     
     default:
-        _commandAck = 0x02;
         break;
     }
 }
@@ -311,7 +310,7 @@ uint64_t Application::getCurrentMs()
 
 void Application::_sendHeartbeat()
 {
-    if (_serialLink && _serialLink->isConnected() && _receiveHeartbeat) {
+    if (_serialLink && _serialLink->isConnected()) {
         mavlink_message_t msg;
         uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
         mavlink_msg_heartbeat_pack(255, MAV_COMP_ID_MISSIONPLANNER, &msg, MAV_TYPE_GENERIC, MAV_AUTOPILOT_GENERIC, MAV_MODE_GUIDED_ARMED, 0, MAV_STATE_ACTIVE);
@@ -539,6 +538,31 @@ void Application::_sendSysStatusTOCtrlCenter()
     uint8_t buf[CTRL_CENTER_MSG_FRAME_LEN_MAX] = {0};
     ctrl_center_message_t message;
     ctrl_center_sys_status_t sysStatus;
+#if 1//TEST 测试
+    sysStatus.position.altitude = 1000000000000000000;
+    sysStatus.position.latitude = 1000000000000000000;
+    sysStatus.position.longitude = 1000000000000000000;
+    sysStatus.rtkFixType = 125;
+    sysStatus.relativeAltitude = 1000000000000000000;
+    sysStatus.velocity.vx = -10000;
+    sysStatus.velocity.vy = -10000;
+    sysStatus.velocity.vz = -10000;
+    sysStatus.accSpeed.accx = -10000;
+    sysStatus.accSpeed.accy = -10000;
+    sysStatus.accSpeed.accz = -10000;
+    sysStatus.roll = -10000;
+    sysStatus.pitch = -10000;
+    sysStatus.yaw = 20000;
+    sysStatus.angleVelocity.vx = -10000;
+    sysStatus.angleVelocity.vy = -10000;
+    sysStatus.angleVelocity.vz = -10000;
+    sysStatus.allSensorsHealthy = 125;
+    sysStatus.commandAck = 125;
+    memset(&sysStatus.reserved[0], 125, 32);
+#else
+    sysStatus.position.altitude = _altitude;
+    sysStatus.position.latitude = _latitude;
+    sysStatus.position.longitude = _longitude;
     sysStatus.rtkFixType = _rtkFixType;
     sysStatus.relativeAltitude = _relativeAltitude * 10;
     sysStatus.velocity.vx = _velocityNED_x * 100;
@@ -555,13 +579,15 @@ void Application::_sendSysStatusTOCtrlCenter()
     sysStatus.angleVelocity.vz = _angleSpeed_z * 100;
     sysStatus.allSensorsHealthy = _allSensorsHealthy;
     sysStatus.commandAck = _commandAck;
+    memset(&sysStatus.reserved[0], 0, 32);
+#endif
     ctrl_center_msg_sys_status_pack(sysStatus, message);
     int length = ctrl_center_msg_to_send_buffer(buf, message);
     if (_udpLink) {
         _udpLink->writeData(buf, length);
     }
 
-    _commandAck = 0x00;
+    _commandAck = 0;
 }
 
 void Application::_sendBatteryInfoToCtrlCenter()

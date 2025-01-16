@@ -54,7 +54,7 @@ typedef struct _Protocol_body {
     uint8_t type;      // 帧类型
     uint8_t payload[CTRL_CENTER_MSG_PAYLOAD_LEN_MAX];
     uint8_t checkSum;  // 1字节的累加校验和  帧长度~校验和 (不包含校验和)
-    uint16_t tail;      // 帧尾 两个字节  固定为0x193F
+    uint16_t tail;      // 帧尾 两个字节  固定为0x3F19
 } ctrl_center_message_t;
 
 /// TODO ：在这下面添加负载结构体
@@ -63,19 +63,19 @@ typedef struct __ctrl_center_position_t {
     double longitude;
     double latitude;
     double altitude;
-} ctrl_center_position_t;
+} __attribute__((packed)) ctrl_center_position_t;
 // 速度
 typedef struct __ctrl_center_velocity_t {
     int16_t vx;
     int16_t vy;
     int16_t vz;
-} ctrl_center_velocity_t;
+} __attribute__((packed)) ctrl_center_velocity_t;
 // 加速度
 typedef struct __ctrl_center_accelerated_speed_t {
     int16_t accx;
     int16_t accy;
     int16_t accz;
-} ctrl_center_accelerated_speed_t;
+} __attribute__((packed)) ctrl_center_accelerated_speed_t;
 
 // 飞控→信息模块→指控/自主 0x02
 typedef struct __ctrl_center_sys_status_t {
@@ -91,12 +91,12 @@ typedef struct __ctrl_center_sys_status_t {
     uint8_t allSensorsHealthy = 0;  // 0无故障；其他故障码
     uint8_t commandAck = 0;         // 命令接收状态 0x00-默认值 0x01-正常接收 0x02-未接收
     uint8_t reserved[32];       // 预留 
-} ctrl_center_sys_status_t;
+} __attribute__((packed)) ctrl_center_sys_status_t;
 
 // 飞控→信息模块→能源 0x03
 typedef struct __ctrl_center_power_t {
     uint16_t power;     // 单位kw,  组帧时*100
-} ctrl_center_power_t;
+} __attribute__((packed)) ctrl_center_power_t;
 
 // 指控/自主→信息模块→飞控 0x04
 typedef struct __ctrl_center_command_long_t {

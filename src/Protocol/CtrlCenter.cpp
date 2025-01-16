@@ -285,7 +285,7 @@ void ctrl_center_msg_position_pack(double longitude, double latitude, double alt
     double64ToBeBytes(altitude, message.payload, &index);
 #endif
     message.checkSum = 0;
-    message.tail = 0x193F;
+    message.tail = 0x3F19;
 }
 
 void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_center_message_t &message)
@@ -314,6 +314,7 @@ void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_ce
     int16ToLeBytes(sysStatus.angleVelocity.vz, message.payload, &index);
     message.payload[index++] = sysStatus.allSensorsHealthy;
     message.payload[index++] = sysStatus.commandAck;
+    memcpy(&message.payload[index], &sysStatus.reserved[0], 32);
 #else
     message.payload[index++] = sysStatus.rtkFixType;
     double64ToBeBytes(sysStatus.position.longitude, message.payload, &index);
@@ -334,9 +335,10 @@ void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_ce
     int16ToBeBytes(sysStatus.angleVelocity.vz, message.payload, &index);
     message.payload[index++] = sysStatus.allSensorsHealthy;
     message.payload[index++] = sysStatus.commandAck;
+    memcpy(&message.payload[index], &sysStatus.reserved[0], 32);
 #endif
     message.checkSum = 0;
-    message.tail = 0x193F;
+    message.tail = 0x3F19;
 }
 
 void ctrl_center_msg_power_pack(uint16_t power, ctrl_center_message_t &message)
@@ -351,7 +353,7 @@ void ctrl_center_msg_power_pack(uint16_t power, ctrl_center_message_t &message)
     uint16ToBeBytes(power, message.payload, &index);
 #endif
     message.checkSum = 0;
-    message.tail = 0x193F;
+    message.tail = 0x3F19;
 }
 
 int ctrl_center_msg_to_send_buffer(uint8_t *buf, const ctrl_center_message_t &message)
