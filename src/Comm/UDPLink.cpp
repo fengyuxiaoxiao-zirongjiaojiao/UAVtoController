@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 22:59:57
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-05 16:01:37
+ * @LastEditTime: 2025-01-16 17:07:11
  * @FilePath: /UAVtoController/src/Comm/UDPLink.cpp
  * @Description: 
  */
@@ -71,6 +71,22 @@ void UDPLink::_readDataFunction(UDPLink *caller)
         Logger::getInstance()->log(LOGLEVEL_FATAL, "客户端: 套接字创建失败");
         exit(EXIT_FAILURE);
     }
+
+    // 设置客户端地址和端口（绑定自己的端口）
+    if (Application::getInstance()->argUdpIsBindLocalPort()) {
+        struct sockaddr_in server_addr, client_addr;
+        memset(&client_addr, 0, sizeof(client_addr));
+        client_addr.sin_family = AF_INET;
+        client_addr.sin_addr.s_addr = INADDR_ANY; // 绑定到所有可用地址
+        client_addr.sin_port = htons(Application::getInstance()->argUdpLocalPort());      // 指定客户端使用的端口号（例如 9090）
+
+        if (bind(_sockfd, (const struct sockaddr *)&client_addr, sizeof(client_addr)) < 0) {
+            perror("客户端: 绑定端口失败");
+            close(_sockfd);
+            exit(EXIT_FAILURE);
+        }
+    }
+    
 
     // 设置服务器地址和端口
     memset(&_serverAddr, 0, sizeof(_serverAddr));

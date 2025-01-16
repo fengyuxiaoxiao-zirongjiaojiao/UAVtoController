@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:40:08
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-16 11:46:59
+ * @LastEditTime: 2025-01-16 16:58:02
  * @FilePath: /UAVtoController/src/Application.cpp
  * @Description: 
  */
@@ -69,11 +69,14 @@ void Application::loadSettings()
     _argBaudRate = reader.GetInteger("COMM","SerialRate", 115200);
     _argUdpServerIP = reader.GetString("COMM","UdpHost", "127.0.0.1");
     _argUdpServerPort = reader.GetInteger("COMM","UdpPort", 2001);
+    _argUdpLocalPort = reader.GetInteger("COMM", "UdpLocalPort", 2002);
+    _argUdpIsBindLocalPort = reader.GetBoolean("COMM", "IsBindLocalPort", true);
     int level = reader.GetInteger("LOG","LEVEL", 1);
     Logger::getInstance()->setLogLevel((LogLevel)level);
 
     Logger::getInstance()->log(LOGLEVEL_INFO, "SerialPort:" + _argSerialPort + " SerialRate:" + std::to_string(_argBaudRate) + 
                                                 " UdpHost:" + _argUdpServerIP + " UdpPort:" + std::to_string(_argUdpServerPort) + 
+                                                " UdpLocalPort:" + std::to_string(_argUdpLocalPort) + " IsBindLocalPort:" + std::string(_argUdpIsBindLocalPort?"true":"false") + 
                                                 " LogLevel:" + std::to_string(level));
 }
 
@@ -95,6 +98,8 @@ void Application::saveSettings()
     iniFile << "SerialRate = " << _argBaudRate << std::endl;
     iniFile << "UdpHost = " << _argUdpServerIP << std::endl;
     iniFile << "UdpPort = " << _argUdpServerPort << std::endl;
+    iniFile << "UdpLocalPort = " << _argUdpLocalPort << std::endl;
+    iniFile << "IsBindLocalPort = " << _argUdpIsBindLocalPort << std::endl;
 
     iniFile << "[LOG]" << std::endl;
     iniFile << "LEVEL = " << Logger::getInstance()->logLevel() << std::endl;
@@ -538,7 +543,7 @@ void Application::_sendSysStatusTOCtrlCenter()
     uint8_t buf[CTRL_CENTER_MSG_FRAME_LEN_MAX] = {0};
     ctrl_center_message_t message;
     ctrl_center_sys_status_t sysStatus;
-#if 1//TEST 测试
+#if 0//TEST 测试
     sysStatus.position.altitude = 1000000000000000000;
     sysStatus.position.latitude = 1000000000000000000;
     sysStatus.position.longitude = 1000000000000000000;

@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:39:34
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-15 12:00:07
+ * @LastEditTime: 2025-01-16 16:51:51
  * @FilePath: /UAVtoController/src/Application.hpp
  * @Description: 
  */
@@ -58,6 +58,7 @@ public:
     std::string argUdpServerIP() { return _argUdpServerIP; }
     int argUdpServerPort() { return _argUdpServerPort; }
     int argUdpLocalPort() { return _argUdpLocalPort; }
+    bool argUdpIsBindLocalPort() { return _argUdpIsBindLocalPort; }
 
     uint64_t getCurrentMs();
 private:
@@ -141,6 +142,7 @@ private:
     std::string _argUdpServerIP = "127.0.0.1";
     int _argUdpServerPort = 2001;
     int _argUdpLocalPort = 2002;
+    bool _argUdpIsBindLocalPort = true; // 是否绑定端口号
 
     ProtocolCtrlCenter *_ctrlCenter;
 

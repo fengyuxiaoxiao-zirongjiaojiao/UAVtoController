@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 21:52:35
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-03 20:37:11
+ * @LastEditTime: 2025-01-16 17:02:08
  * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.hpp
  * @Description: 
  */
@@ -48,37 +48,37 @@ typedef enum _Protocol_type{
 } CTRL_CENTER_MSG_TYPE;
 
 // 帧结构  所有数据采用小端字节序（低地址低字节）
-typedef struct _Protocol_body {
+typedef struct __attribute__((packed)) _Protocol_body {
     uint16_t header;     // 2字节的帧头，固定为0xAFAF
     uint16_t lenght;     // 整帧长度，帧头到帧尾
     uint8_t type;      // 帧类型
     uint8_t payload[CTRL_CENTER_MSG_PAYLOAD_LEN_MAX];
     uint8_t checkSum;  // 1字节的累加校验和  帧长度~校验和 (不包含校验和)
-    uint16_t tail;      // 帧尾 两个字节  固定为0x3F19
+    uint16_t tail;      // 帧尾 两个字节  固定为0x193F
 } ctrl_center_message_t;
 
 /// TODO ：在这下面添加负载结构体
 // 位置 0x01
-typedef struct __ctrl_center_position_t {
+typedef struct __attribute__((packed)) __ctrl_center_position_t {
     double longitude;
     double latitude;
     double altitude;
-} __attribute__((packed)) ctrl_center_position_t;
+} ctrl_center_position_t;
 // 速度
-typedef struct __ctrl_center_velocity_t {
+typedef struct __attribute__((packed)) __ctrl_center_velocity_t {
     int16_t vx;
     int16_t vy;
     int16_t vz;
-} __attribute__((packed)) ctrl_center_velocity_t;
+} ctrl_center_velocity_t;
 // 加速度
-typedef struct __ctrl_center_accelerated_speed_t {
+typedef struct __attribute__((packed)) __ctrl_center_accelerated_speed_t {
     int16_t accx;
     int16_t accy;
     int16_t accz;
-} __attribute__((packed)) ctrl_center_accelerated_speed_t;
+} ctrl_center_accelerated_speed_t;
 
 // 飞控→信息模块→指控/自主 0x02
-typedef struct __ctrl_center_sys_status_t {
+typedef struct __attribute__((packed)) __ctrl_center_sys_status_t {
     uint8_t rtkFixType; // RTK状态
     ctrl_center_position_t position; // 平台地理位置
     double relativeAltitude;    // 相对起飞点高度×10，例如:123.4，会发送1234
@@ -91,15 +91,15 @@ typedef struct __ctrl_center_sys_status_t {
     uint8_t allSensorsHealthy = 0;  // 0无故障；其他故障码
     uint8_t commandAck = 0;         // 命令接收状态 0x00-默认值 0x01-正常接收 0x02-未接收
     uint8_t reserved[32];       // 预留 
-} __attribute__((packed)) ctrl_center_sys_status_t;
+} ctrl_center_sys_status_t;
 
 // 飞控→信息模块→能源 0x03
-typedef struct __ctrl_center_power_t {
+typedef struct __attribute__((packed)) __ctrl_center_power_t {
     uint16_t power;     // 单位kw,  组帧时*100
-} __attribute__((packed)) ctrl_center_power_t;
+} ctrl_center_power_t;
 
 // 指控/自主→信息模块→飞控 0x04
-typedef struct __ctrl_center_command_long_t {
+typedef struct __attribute__((packed)) __ctrl_center_command_long_t {
     uint16_t sequenceNumber;    // 时序  从0开始累加
     uint64_t timestamp;         // 时间戳
     uint8_t mode;               // 状态模式
@@ -161,7 +161,7 @@ typedef enum {
     CTRL_CENTER_PARSE_STATE_GOT_TAIL2,
 } ctrl_center_parse_state_t;
 
-typedef struct __ctrl_center_status {
+typedef struct __attribute__((packed)) __ctrl_center_status {
     ctrl_center_parse_state_t state;
     int pack_index;
     int pack_len;
