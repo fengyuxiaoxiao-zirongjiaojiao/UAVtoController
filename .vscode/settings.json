@@ -64,7 +64,9 @@
         "cinttypes": "cpp",
         "typeindex": "cpp",
         "typeinfo": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "codecvt": "cpp",
+        "filesystem": "cpp"
     },
     "ros.distro": "noetic"
 }
