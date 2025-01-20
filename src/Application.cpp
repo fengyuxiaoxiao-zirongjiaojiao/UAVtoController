@@ -1,8 +1,8 @@
 /*
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:40:08
- * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-16 16:58:02
+ * @LastEditors: vincent_xjw@163.com
+ * @LastEditTime: 2025-01-19 23:50:02
  * @FilePath: /UAVtoController/src/Application.cpp
  * @Description: 
  */
@@ -17,9 +17,9 @@ Application* Application::_instance = nullptr;
 
 Application::Application(int argc, char **argv) : ProtocolObserver()
 , _mavlink(nullptr)
-, _serialLink(nullptr)
+, _vehicleLink(nullptr)
 , _ctrlCenter(nullptr)
-, _udpLink(nullptr)
+, _ctrlCenterLink(nullptr)
 , _flightModeInterface(nullptr)
 {
     memset(&_command_long, 0, sizeof(ctrl_center_command_long_t));
@@ -31,9 +31,9 @@ Application::~Application()
 {
     _quit = true;
     _instance = nullptr;
-    if (_serialLink) {
-        delete _serialLink;
-        _serialLink = nullptr;
+    if (_vehicleLink) {
+        delete _vehicleLink;
+        _vehicleLink = nullptr;
     }
     if (_mavlink) {
         delete _mavlink;
@@ -44,9 +44,9 @@ Application::~Application()
         delete _ctrlCenter;
         _ctrlCenter = nullptr;
     }
-    if (_udpLink) {
-        delete _udpLink;
-        _udpLink = nullptr;
+    if (_ctrlCenterLink) {
+        delete _ctrlCenterLink;
+        _ctrlCenterLink = nullptr;
     }
 }
 
@@ -65,19 +65,29 @@ void Application::loadSettings()
     }
 
     // 读取数据库相关参数
-    _argSerialPort = reader.GetString("COMM","SerialPort", "/dev/ttyS0");
-    _argBaudRate = reader.GetInteger("COMM","SerialRate", 115200);
-    _argUdpServerIP = reader.GetString("COMM","UdpHost", "127.0.0.1");
-    _argUdpServerPort = reader.GetInteger("COMM","UdpPort", 2001);
-    _argUdpLocalPort = reader.GetInteger("COMM", "UdpLocalPort", 2002);
-    _argUdpIsBindLocalPort = reader.GetBoolean("COMM", "IsBindLocalPort", true);
+    // 飞机参数
+    _vehicleLinkConfig.setType(reader.GetString("VEHICLE", "Type", "serial"));
+    _vehicleLinkConfig.setSerialPort(reader.GetString("VEHICLE", "SerialPort", "/dev/ttyS0"));
+    _vehicleLinkConfig.setSerialBaudrate(reader.GetInteger("VEHICLE", "SerialRate", 115200));
+    _vehicleLinkConfig.setUdpServerIP(reader.GetString("VEHICLE", "UdpHost", "127.0.0.1"));
+    _vehicleLinkConfig.setUdpServerPort(reader.GetInteger("VEHICLE", "UdpPort", 18570));
+    _vehicleLinkConfig.setUdpLocalPort(reader.GetInteger("VEHICLE", "UdpLocalPort", 14550));
+    _vehicleLinkConfig.setUdpIsBindLocalPort(reader.GetBoolean("VEHICLE", "IsBindLocalPort", true));
+    // 指控参数
+    _ctrlCenterLinkConfig.setType(reader.GetString("CTRLCENTER", "Type", "udp"));
+    _ctrlCenterLinkConfig.setSerialPort(reader.GetString("CTRLCENTER", "SerialPort", "/dev/ttyS0"));
+    _ctrlCenterLinkConfig.setSerialBaudrate(reader.GetInteger("CTRLCENTER", "SerialRate", 115200));
+    _ctrlCenterLinkConfig.setUdpServerIP(reader.GetString("CTRLCENTER", "UdpHost", "127.0.0.1"));
+    _ctrlCenterLinkConfig.setUdpServerPort(reader.GetInteger("CTRLCENTER", "UdpPort", 2001));
+    _ctrlCenterLinkConfig.setUdpLocalPort(reader.GetInteger("CTRLCENTER", "UdpLocalPort", 2002));
+    _ctrlCenterLinkConfig.setUdpIsBindLocalPort(reader.GetBoolean("CTRLCENTER", "IsBindLocalPort", true));
+
     int level = reader.GetInteger("LOG","LEVEL", 1);
     Logger::getInstance()->setLogLevel((LogLevel)level);
 
-    Logger::getInstance()->log(LOGLEVEL_INFO, "SerialPort:" + _argSerialPort + " SerialRate:" + std::to_string(_argBaudRate) + 
-                                                " UdpHost:" + _argUdpServerIP + " UdpPort:" + std::to_string(_argUdpServerPort) + 
-                                                " UdpLocalPort:" + std::to_string(_argUdpLocalPort) + " IsBindLocalPort:" + std::string(_argUdpIsBindLocalPort?"true":"false") + 
-                                                " LogLevel:" + std::to_string(level));
+    Logger::getInstance()->log(LOGLEVEL_INFO, " vehicle link cofig:" + _vehicleLinkConfig.toString());
+    Logger::getInstance()->log(LOGLEVEL_INFO, " ctrl center link cofig:" + _ctrlCenterLinkConfig.toString());
+    Logger::getInstance()->log(LOGLEVEL_INFO, " LogLevel:" + std::to_string(level));
 }
 
 void Application::saveSettings()
@@ -93,13 +103,10 @@ void Application::saveSettings()
     }
 
     // 写入数据库配置
-    iniFile << "[COMM]" << std::endl;
-    iniFile << "SerialPort = " << _argSerialPort << std::endl;
-    iniFile << "SerialRate = " << _argBaudRate << std::endl;
-    iniFile << "UdpHost = " << _argUdpServerIP << std::endl;
-    iniFile << "UdpPort = " << _argUdpServerPort << std::endl;
-    iniFile << "UdpLocalPort = " << _argUdpLocalPort << std::endl;
-    iniFile << "IsBindLocalPort = " << _argUdpIsBindLocalPort << std::endl;
+    iniFile << "[VEHICLE]" << std::endl;
+    iniFile << _vehicleLinkConfig.toString() << std::endl;
+    iniFile << "[CTRLCENTER]" << std::endl;
+    iniFile << _ctrlCenterLinkConfig.toString() << std::endl;
 
     iniFile << "[LOG]" << std::endl;
     iniFile << "LEVEL = " << Logger::getInstance()->logLevel() << std::endl;
@@ -113,14 +120,26 @@ bool Application::init()
     loadSettings();
 
     _mavlink = new ProtocolMavlink(this);
-    _serialLink = new SerialLink(_mavlink);
-
-    bool ok = _serialLink->open(_argSerialPort, _argBaudRate);
+    if (_vehicleLinkConfig.type().compare("serial") == 0) {
+        _vehicleLink = new SerialLink(_mavlink, &_vehicleLinkConfig);
+    }
+    else if (_vehicleLinkConfig.type().compare("udp") == 0)
+    {
+        _vehicleLink = new UDPLink(_mavlink, &_vehicleLinkConfig);
+    }
+    bool ok = _vehicleLink->connectLink();
     if (!ok) return false;
 
     _ctrlCenter = new ProtocolCtrlCenter(this);
-    _udpLink = new UDPLink(_ctrlCenter);
-    ok = _udpLink->connectLink();
+    if (_ctrlCenterLinkConfig.type().compare("serial") == 0)
+    {
+        _ctrlCenterLink = new SerialLink(_ctrlCenter, &_ctrlCenterLinkConfig);
+    }
+    else if (_ctrlCenterLinkConfig.type().compare("udp") == 0)
+    {
+        _ctrlCenterLink = new UDPLink(_ctrlCenter, &_ctrlCenterLinkConfig);
+    }
+    ok = _ctrlCenterLink->connectLink();
     if (!ok) return false;
     return true;
 }
@@ -136,11 +155,11 @@ void Application::quit()
     }
     while(!_isWorkThreadExited) { std::this_thread::sleep_for(std::chrono::milliseconds(200)); }
 
-    if (_serialLink && _serialLink->isConnected()) {
-        _serialLink->disconnectLink();
+    if (_vehicleLink && _vehicleLink->isConnected()) {
+        _vehicleLink->disconnectLink();
     }
-    if (_udpLink && _udpLink->isConnected()) {
-        _udpLink->disconnectLink();
+    if (_ctrlCenterLink && _ctrlCenterLink->isConnected()) {
+        _ctrlCenterLink->disconnectLink();
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -158,14 +177,12 @@ void Application::exec()
     _sendHeartbeat();
     while (!_quit) {
         now = std::chrono::high_resolution_clock::now();
-        if (_serialLink && !_serialLink->isConnected()) {
-            bool opened = _serialLink->open(_argSerialPort, _argBaudRate);
-        }
-
-        if (std::chrono::duration<float, std::milli>(now - last_heartbeat).count() > 1000) {
+        if (std::chrono::duration<float, std::milli>(now - last_heartbeat).count() > 1000)
+        {
             last_heartbeat = now;
             _sendHeartbeat();
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 }
 
@@ -246,8 +263,31 @@ void Application::onMavlinkMessageReceive(const mavlink_message_t &message)
         _handleHilStateQuateRnion(message);
     }
     break;
+    case MAVLINK_MSG_ID_HOME_POSITION:
+    {
+        _handleHomePosition(message);
+    }
+    break;
+    case MAVLINK_MSG_ID_STATUSTEXT:
+    {
+        _handleStatustext(message);
+    }
+    break;
+    case MAVLINK_MSG_ID_PING:
+    {
+        _handlePing(message);
+    }
+    break;
     default:
         break;
+    }
+}
+
+void Application::setArmed(bool armed)
+{
+    if (armed != _armed) {
+        Logger::getInstance()->log(LOGLEVEL_INFO, "setting " + std::string(armed?"armed":"disArmed"));
+        _sendMavCommand(MAV_CMD_COMPONENT_ARM_DISARM, armed ? 1.0f : 0.0f);
     }
 }
 
@@ -265,38 +305,64 @@ void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &messag
     {
         ctrl_center_command_long_t command_long;
         ctrl_center_msg_command_long_decode(&message, &command_long);
-        _command_long = command_long;
+        
         // TODO : 收到指控的数据后进行相应的处理
         if (command_long.mode == 0) {// 0-待机 
-            // TODO
-        } else if (command_long.mode == 1) {// 1-作战 
-            // TODO
-        } else if (command_long.mode == 2) {// 2-悬停
+            // 上锁
+            if (_relativeAltitude < 0.2) {
+                setArmed(false);
+            }
+        }
+        else if (command_long.mode == 1)
+        { // 1-作战
+            // 解锁
+            setArmed(true);
+        }
+        else if (command_long.mode == 2)
+        { // 2-悬停
             if (_flightModeInterface) {
                 _setFlightMode(_flightModeInterface->loiterMode());
             }
-        } else if (command_long.mode == 3) {// 3-一键起飞 
+        }
+        else if (command_long.mode == 3)
+        { // 3-一键起飞
             _guidedTakeoff(10);
-        } else if (command_long.mode == 4) {// 4-一键返航 
+        }
+        else if (command_long.mode == 4)
+        { // 4-一键返航
             if (_flightModeInterface) {
                 _setFlightMode(_flightModeInterface->rtlMode());
             }
-        } else if (command_long.mode == 5) {// 5-原地降落 
+        }
+        else if (command_long.mode == 5)
+        { // 5-原地降落
             if (_flightModeInterface) {
                 _setFlightMode(_flightModeInterface->landMode());
             }
-        } else if (command_long.mode == 6) {// 6-自主巡航 
-            // _workThreadFunction();
-        } else if (command_long.mode == 7) {// 7-定高，需要发送高度信息
-            if (_flightModeInterface) {
-                _setFlightMode(_flightModeInterface->hoverMode());
-            }
-        } else if (command_long.mode == 8) {// 8-遥操作模式
+        }
+        else if (command_long.mode == 6)
+        { // 6-自主巡航
+            // _workThreadFunction(); update position
+            // setArmed(true);
+            // std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            _setOffboardMode(2);
+        }
+        else if (command_long.mode == 7)
+        { // 7-定高，需要发送高度信息
+            // if (_flightModeInterface) {
+            //     _setFlightMode(_flightModeInterface->hoverMode());
+            // }
+            // 起飞到指定高度
+            _guidedTakeoff(command_long.position_1.altitude - _homeAltitude);
+        }
+        else if (command_long.mode == 8)
+        { // 8-遥操作模式
             if (_flightModeInterface) {
                 _setFlightMode(_flightModeInterface->stabilizedMode());
             }
         }
 
+        _command_long = command_long;
     }
     break;
     
@@ -313,14 +379,25 @@ uint64_t Application::getCurrentMs()
     return value;
 }
 
+uint64_t Application::getCurrentMicroSec()
+{
+    auto now = std::chrono::system_clock::now();
+    auto now_us = std::chrono::time_point_cast<std::chrono::microseconds>(now);
+    auto value = now_us.time_since_epoch().count();
+    return value;
+}
+
 void Application::_sendHeartbeat()
 {
-    if (_serialLink && _serialLink->isConnected()) {
+    if (_vehicleLink && _vehicleLink->isConnected()) {
         mavlink_message_t msg;
         uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
-        mavlink_msg_heartbeat_pack(255, MAV_COMP_ID_MISSIONPLANNER, &msg, MAV_TYPE_GENERIC, MAV_AUTOPILOT_GENERIC, MAV_MODE_GUIDED_ARMED, 0, MAV_STATE_ACTIVE);
+        // 地面站 常用
+        // mavlink_msg_heartbeat_pack(_systemId, _componentId, &msg, MAV_TYPE_GCS, MAV_AUTOPILOT_ARDUPILOTMEGA, MAV_MODE_MANUAL_ARMED, 0, MAV_STATE_ACTIVE);
+        // 板上系统 常用mavros 
+        mavlink_msg_heartbeat_pack(_systemId, _componentId, &msg, MAV_TYPE_ONBOARD_CONTROLLER, MAV_AUTOPILOT_INVALID, MAV_MODE_MANUAL_ARMED, 0, MAV_STATE_ACTIVE);
         int len = mavlink_msg_to_send_buffer(buf, &msg);
-        _serialLink->writeData(buf, len);
+        _vehicleLink->writeData(buf, len);
     }
 }
 
@@ -334,36 +411,37 @@ void Application::_setFlightMode(const std::string &mode)
 
         newBaseMode |= base_mode;
 
-        if (_serialLink && _serialLink->isConnected()) {
+        if (_vehicleLink && _vehicleLink->isConnected()) {
+            Logger::getInstance()->log(LOGLEVEL_INFO, "setting flight mode:" + mode);
             mavlink_message_t msg;
             uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
-            mavlink_msg_set_mode_pack(255, MAV_COMP_ID_MISSIONPLANNER, &msg, _targetSystemId, newBaseMode, custom_mode);
+            mavlink_msg_set_mode_pack(_systemId, _componentId, &msg, _targetSystemId, newBaseMode, custom_mode);
             int len = mavlink_msg_to_send_buffer(buf, &msg);
-            _serialLink->writeData(buf, len);
+            _vehicleLink->writeData(buf, len);
         }
     }
 }
 
 void Application::_requestDataStream(MAV_DATA_STREAM stream, uint16_t rate)
 {
-    if (_serialLink && _serialLink->isConnected()) {
+    if (_vehicleLink && _vehicleLink->isConnected()) {
         mavlink_message_t msg;
         uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
-        mavlink_msg_request_data_stream_pack(255, MAV_COMP_ID_MISSIONPLANNER, &msg, _targetSystemId, _targetComponentId, stream, rate, 1);
+        mavlink_msg_request_data_stream_pack(_systemId, _componentId, &msg, _targetSystemId, _targetComponentId, stream, rate, 1);
         int len = mavlink_msg_to_send_buffer(buf, &msg);
-        _serialLink->writeData(buf, len);
+        _vehicleLink->writeData(buf, len);
     }    
 }
 
 void Application::_sendMavCommand(MAV_CMD command, float param1, float param2, float param3, float param4, float param5, float param6, float param7)
 {
-    if (_serialLink && _serialLink->isConnected()) {
+    if (_vehicleLink && _vehicleLink->isConnected()) {
         mavlink_message_t msg;
         uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
-        mavlink_msg_command_long_pack(255, MAV_COMP_ID_MISSIONPLANNER, &msg, _targetSystemId, _targetComponentId, command, 0,
-                                        param1, param2, param3, param4, param5, param6, param7);
+        mavlink_msg_command_long_pack(_systemId, _componentId, &msg, _targetSystemId, _targetComponentId, command, 0,
+                                      param1, param2, param3, param4, param5, param6, param7);
         int len = mavlink_msg_to_send_buffer(buf, &msg);
-        _serialLink->writeData(buf, len);
+        _vehicleLink->writeData(buf, len);
     } 
 }
 
@@ -379,25 +457,98 @@ void Application::_guidedTakeoff(float relAltitude)
                     app->_setFlightMode(guidedMode);
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
-                while(!app->armed()) {
-                    app->setArmed(true);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
+                // int tryCount = 3;
+                // while (!app->armed() && tryCount--)
+                // {
+                //     app->setArmed(true);
+                //     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                // }
                 app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
-                        -1,                                     // No pitch requested
-                        0, 0,                                   // param 2-4 unused
-                        NAN, NAN, NAN,                          // No yaw, lat, lon
-                        alt);
+                                     -1,   // No pitch requested
+                                     0, 0, // param 2-4 unused
+                                     std::numeric_limits<float>::quiet_NaN(),
+                                     std::numeric_limits<float>::quiet_NaN(),
+                                     std::numeric_limits<float>::quiet_NaN(), // No yaw, lat, lon
+                                     alt);
             } else if (app->isPX4FirmwareClass()) {
                 app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
-                        -1,                                     // No pitch requested
-                        0, 0,                                   // param 2-4 unused
-                        NAN, NAN, NAN,                          // No yaw, lat, lon
-                        alt);
+                                     -1,   // No pitch requested
+                                     0, 0, // param 2-4 unused
+                                     std::numeric_limits<float>::quiet_NaN(),
+                                     std::numeric_limits<float>::quiet_NaN(),
+                                     std::numeric_limits<float>::quiet_NaN(), // No yaw, lat, lon
+                                     alt + app->_homeAltitude);
+                // int tryCount = 3;
+                // while (!app->armed() && tryCount--)
+                // {
+                //     app->setArmed(true);
+                //     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                // }
             }
+
+            // if (!app->armed()) {
+            //     Logger::getInstance()->log(LOGLEVEL_INFO, "setArmed failed. And try more then 3.");
+            // }
         }
     }, this, relAltitude); // 创建线程，传递 Lambda 表达式和参数
     t.join(); // 等待线程完成
+}
+
+void Application::_requestHomePosition()
+{
+    _sendMavCommand(MAV_CMD_GET_HOME_POSITION);
+}
+
+void Application::_setOffboardMode(float height)
+{
+    if (!_flightModeInterface) {
+        return;
+    }
+        
+    std::thread t([](Application *app, float alt)
+                  {
+        if (app->isMultiRotor()) {
+            if (app->isPX4FirmwareClass()) {
+                std::string guidedMode = app->_flightModeInterface->guidedMode();
+                for (int i = 100; i > 0; --i)
+                {
+                    // set_position_target_local_ned
+                    if (app->_vehicleLink && app->_vehicleLink->isConnected())
+                    {
+                        mavlink_message_t msg;
+                        uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
+                        uint32_t bootTimeMs = app->getCurrentMs() - app->_bootTimeMs;
+                        // TODO TEST
+                        // mavlink_msg_set_position_target_local_ned_pack(app->_systemId, app->_componentId, &msg, bootTimeMs,
+                        //                                                app->_targetSystemId, app->_targetComponentId, MAV_FRAME_LOCAL_NED, 0, 0, 0,
+                        //                                                alt, 0, 0, 1, 0, 0, 1, 0, 0);
+                        mavlink_msg_set_position_target_global_int_pack(app->_systemId, app->_componentId, &msg, bootTimeMs,
+                                                                        app->_targetSystemId, app->_targetComponentId, MAV_FRAME_GLOBAL_RELATIVE_ALT_INT, 0,
+                                                                        app->_latitude * 1e7, app->_longitude * 1e7, alt, 0, 0, 0, 0, 0, 0, 0, 0);
+                        int len = mavlink_msg_to_send_buffer(buf, &msg);
+                        app->_vehicleLink->writeData(buf, len);
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+
+                int tryCount = 3;
+                while (app->_flightMode.compare(guidedMode) != 0 && app->_isWorkThreadRunning)
+                {
+                    if (tryCount-- <= 0)
+                    {
+                        Logger::getInstance()->log(LOGLEVEL_ERROR, "Con't switch flight to \"" + guidedMode + "\"");
+                        break;
+                    }
+                    app->_setFlightMode(guidedMode);
+                    int checkCount = 10;
+                    while (app->_flightMode.compare(guidedMode) != 0 && app->_isWorkThreadRunning && checkCount--)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                }
+            }
+        } }, this, height);      // 创建线程，传递 Lambda 表达式和参数
+    t.join();                              // 等待线程完成
 }
 
 void Application::_handleHeartbeat(const mavlink_message_t &msg)
@@ -428,6 +579,7 @@ void Application::_handleHeartbeat(const mavlink_message_t &msg)
 
     if (_armed != newArmed) {
         _armed = newArmed;
+        Logger::getInstance()->log(LOGLEVEL_INFO, "armed changed: " + std::string(_armed ? "armed" : "disArmed"));
     }
 
     if (_firmwareType != heartbeat.autopilot || _vehicleType != heartbeat.type) {
@@ -525,6 +677,38 @@ void Application::_handleHilStateQuateRnion(const mavlink_message_t &msg)
     _acceleratedSpeed_z = hil.zacc;
 }
 
+void Application::_handleHomePosition(const mavlink_message_t &msg)
+{
+    mavlink_home_position_t home;
+    mavlink_msg_home_position_decode(&msg, &home);
+    _homeLatitude = home.latitude / (double)1E7;
+    _homeLongitude = home.longitude / (double)1E7;
+    _homeAltitude = home.altitude / 1000.0;
+    Logger::getInstance()->log(LOGLEVEL_DEBUG, "home position: lat=" + std::to_string(_homeLatitude) + " lng=" + std::to_string(_homeLongitude) + " alt=" + std::to_string(_homeAltitude));
+}
+
+void Application::_handleStatustext(const mavlink_message_t &msg)
+{
+    mavlink_statustext_t txt;
+    mavlink_msg_statustext_decode(&msg, &txt);
+    Logger::getInstance()->log(LOGLEVEL_INFO, "statusText:" + std::string(txt.text));
+}
+
+void Application::_handlePing(const mavlink_message_t &msg)
+{
+    mavlink_ping_t ping;
+    mavlink_msg_ping_decode(&msg, &ping);
+
+    if (_vehicleLink && _vehicleLink->isConnected())
+    {
+        mavlink_message_t msgPing;
+        uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
+        mavlink_msg_ping_pack(_systemId, _componentId, &msgPing, ping.time_usec, ping.seq, msg.sysid, msg.compid);
+        int len = mavlink_msg_to_send_buffer(buf, &msgPing);
+        _vehicleLink->writeData(buf, len);
+    }
+}
+
 // TODO : 发送给指控的函数在下面添加
 
 void Application::_sendPositionTOCtrlCenter()
@@ -533,8 +717,8 @@ void Application::_sendPositionTOCtrlCenter()
     ctrl_center_message_t message;
     ctrl_center_msg_position_pack(_longitude, _latitude, _altitude, message);
     int length = ctrl_center_msg_to_send_buffer(buf, message);
-    if (_udpLink) {
-        _udpLink->writeData(buf, length);
+    if (_ctrlCenterLink) {
+        _ctrlCenterLink->writeData(buf, length);
     }
 }
 
@@ -543,31 +727,6 @@ void Application::_sendSysStatusTOCtrlCenter()
     uint8_t buf[CTRL_CENTER_MSG_FRAME_LEN_MAX] = {0};
     ctrl_center_message_t message;
     ctrl_center_sys_status_t sysStatus;
-#if 0//TEST 测试
-    sysStatus.position.altitude = 1000000000000000000;
-    sysStatus.position.latitude = 1000000000000000000;
-    sysStatus.position.longitude = 1000000000000000000;
-    sysStatus.rtkFixType = 125;
-    sysStatus.relativeAltitude = 1000000000000000000;
-    sysStatus.velocity.vx = -10000;
-    sysStatus.velocity.vy = -10000;
-    sysStatus.velocity.vz = -10000;
-    sysStatus.accSpeed.accx = -10000;
-    sysStatus.accSpeed.accy = -10000;
-    sysStatus.accSpeed.accz = -10000;
-    sysStatus.roll = -10000;
-    sysStatus.pitch = -10000;
-    sysStatus.yaw = 20000;
-    sysStatus.angleVelocity.vx = -10000;
-    sysStatus.angleVelocity.vy = -10000;
-    sysStatus.angleVelocity.vz = -10000;
-    sysStatus.allSensorsHealthy = 125;
-    sysStatus.commandAck = 125;
-    memset(&sysStatus.reserved[0], 125, 32);
-#else
-    sysStatus.position.altitude = _altitude;
-    sysStatus.position.latitude = _latitude;
-    sysStatus.position.longitude = _longitude;
     sysStatus.rtkFixType = _rtkFixType;
     sysStatus.relativeAltitude = _relativeAltitude * 10;
     sysStatus.velocity.vx = _velocityNED_x * 100;
@@ -584,12 +743,10 @@ void Application::_sendSysStatusTOCtrlCenter()
     sysStatus.angleVelocity.vz = _angleSpeed_z * 100;
     sysStatus.allSensorsHealthy = _allSensorsHealthy;
     sysStatus.commandAck = _commandAck;
-    memset(&sysStatus.reserved[0], 0, 32);
-#endif
     ctrl_center_msg_sys_status_pack(sysStatus, message);
     int length = ctrl_center_msg_to_send_buffer(buf, message);
-    if (_udpLink) {
-        _udpLink->writeData(buf, length);
+    if (_ctrlCenterLink) {
+        _ctrlCenterLink->writeData(buf, length);
     }
 
     _commandAck = 0;
@@ -604,16 +761,28 @@ void Application::_sendBatteryInfoToCtrlCenter()
     uint16_t power = tmp * 100;
     ctrl_center_msg_power_pack(power, message);
     int length = ctrl_center_msg_to_send_buffer(buf, message);
-    if (_udpLink) {
-        _udpLink->writeData(buf, length);
+    if (_ctrlCenterLink) {
+        _ctrlCenterLink->writeData(buf, length);
     }
 }
 
 void Application::_workThreadFunction(Application *app)
 {
+    auto now = std::chrono::high_resolution_clock::now();
+    
+    auto last_request_home_position = now;
     _isWorkThreadExited = false;
     while(_isWorkThreadRunning) {
-        if (!isHeartbeatLost() && _command_long.mode == 6) {
+        now = std::chrono::high_resolution_clock::now();
+
+        // if (std::chrono::duration<float, std::milli>(now - last_request_home_position).count() > 5000)
+        // {
+        //     last_request_home_position = now;
+        //     _requestHomePosition();
+        // }
+
+        if (!isHeartbeatLost() && _command_long.mode == 6)
+        {
             double latitude = _command_long.position_1.latitude;
             double longitude = _command_long.position_1.longitude;
             double altitude = _command_long.position_1.altitude;
@@ -627,37 +796,49 @@ void Application::_workThreadFunction(Application *app)
             float yawRate = (_command_long.yawAngleSpeed_1 / 100.0f) * (M_PI/180.0f);
             if (app->isMultiRotor()) {
                 std::string guidedMode = app->_flightModeInterface->guidedMode();
-                while(app->_flightMode.compare(guidedMode) != 0) {
-                    app->_setFlightMode(guidedMode);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-                while(!app->armed()) {
-                    app->setArmed(true);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-                while(app->_relativeAltitude < 10) {
-                    app->_sendMavCommand(MAV_CMD_NAV_TAKEOFF,
-                        -1,                                     // No pitch requested
-                        0, 0,                                   // param 2-4 unused
-                        NAN, NAN, NAN,                          // No yaw, lat, lon
-                        10);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                if (app->_flightMode.compare(guidedMode) == 0)
+                {
+                    // set_position_target_global_int
+                    if (_vehicleLink && _vehicleLink->isConnected())
+                    {
+                        mavlink_message_t msg;
+                        uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
+                        uint32_t bootTimeMs = getCurrentMs() - _bootTimeMs;
+                        mavlink_msg_set_position_target_global_int_pack(_systemId, _componentId, &msg, bootTimeMs,
+                                                                        _targetSystemId, _targetComponentId, MAV_FRAME_GLOBAL_RELATIVE_ALT_INT, 0,
+                                                                        latitude * 1e7, longitude * 1e7, altitude - _homeAltitude, vx, vy, vz, accx, accy, accz, yaw, yawRate);
+                        int len = mavlink_msg_to_send_buffer(buf, &msg);
+                        _vehicleLink->writeData(buf, len);
+                    }
+#if 0 // TEST  原地起飞高度2米
+                    if (_vehicleLink && _vehicleLink->isConnected())
+                    {
+                        mavlink_message_t msg;
+                        uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
+                        uint32_t bootTimeMs = getCurrentMs() - _bootTimeMs;
+                        mavlink_msg_set_position_target_global_int_pack(_systemId, _componentId, &msg, bootTimeMs,
+                                                                        _targetSystemId, _targetComponentId, MAV_FRAME_GLOBAL_RELATIVE_ALT_INT, 0,
+                                                                        _latitude * 1e7, _longitude * 1e7, 2, 0, 0, 0, 0, 0, 0, 0, 0);
+                        int len = mavlink_msg_to_send_buffer(buf, &msg);
+                        _vehicleLink->writeData(buf, len);
+                    }
+#endif
+#if 0 //  TODO TEST  原地起飞高度2米
+                    if (_vehicleLink && _vehicleLink->isConnected())
+                    {
+                        mavlink_message_t msg;
+                        uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
+                        uint32_t bootTimeMs = getCurrentMs() - _bootTimeMs;
+                        mavlink_msg_set_position_target_local_ned_pack(_systemId, _componentId, &msg, bootTimeMs,
+                                                                       _targetSystemId, _targetComponentId, MAV_FRAME_LOCAL_NED, 0, 0, 0,
+                                                                       2, 0, 0, 1, 0, 0, 1, 0, 0);
+                        int len = mavlink_msg_to_send_buffer(buf, &msg);
+                        _vehicleLink->writeData(buf, len);
+                    }
+#endif
                 }
                 
-                // set_position_target_global_int
-                if (_serialLink && _serialLink->isConnected()) {
-                    mavlink_message_t msg;
-                    uint8_t buf[MAVLINK_MAX_PACKET_LEN] = {0};
-                    uint32_t bootTimeMs = getCurrentMs() - _bootTimeMs;
-                    mavlink_msg_set_position_target_global_int_pack(255, MAV_COMP_ID_MISSIONPLANNER, &msg, bootTimeMs, 
-                        _targetSystemId, _targetComponentId, MAV_FRAME_GLOBAL_INT, 0,
-                        latitude * 1e7, longitude * 1e7, altitude, vx, vy, vz, accx, accy, accz, yaw, yawRate);
-                    int len = mavlink_msg_to_send_buffer(buf, &msg);
-                    _serialLink->writeData(buf, len);
-                }
             }
-
-
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

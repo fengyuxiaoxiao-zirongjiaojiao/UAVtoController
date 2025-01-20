@@ -4,7 +4,7 @@
 
 std::mutex SerialLink::_mutex;
 
-SerialLink::SerialLink(ProtocolInterface *protocol) : _protocol(protocol)
+SerialLink::SerialLink(ProtocolInterface *protocol, LinkConfigure *config) : LinkInterface(config), _protocol(protocol)
 {
     Logger::getInstance()->log(LOGLEVEL_DEBUG, "");
     m_SerialPort.connectReadEvent(this);
@@ -82,7 +82,7 @@ void SerialLink::onReadEvent(const char *portName, unsigned int readBufferLen)
 
 bool SerialLink::connectLink()
 {
-    return m_SerialPort.open();
+    return open(_config->serialPort(), _config->serialBaudRate());
 }
 
 void SerialLink::disconnectLink()

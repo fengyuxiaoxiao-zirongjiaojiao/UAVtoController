@@ -1,8 +1,8 @@
 /*
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 22:59:49
- * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2024-12-29 12:21:28
+ * @LastEditors: vincent_xjw@163.com
+ * @LastEditTime: 2025-01-17 20:38:09
  * @FilePath: /UAVtoController/src/Comm/UDPLink.hpp
  * @Description: 
  */
@@ -20,7 +20,7 @@
 class UDPLink : public LinkInterface
 {
 public:
-    UDPLink(ProtocolInterface *protocol);
+    UDPLink(ProtocolInterface *protocol, LinkConfigure *config);
     ~UDPLink();
     
     virtual bool connectLink() override;

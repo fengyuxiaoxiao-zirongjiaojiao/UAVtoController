@@ -2,8 +2,8 @@
 ###
  # @Author: vincent vincent_xjw@163.com
  # @Date: 2024-12-28 10:34:30
- # @LastEditors: vincent vincent_xjw@163.com
- # @LastEditTime: 2025-01-16 18:25:31
+ # @LastEditors: vincent_xjw@163.com
+ # @LastEditTime: 2025-01-19 16:54:01
  # @FilePath: /UAVtoController/build.sh
  # @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 ### 

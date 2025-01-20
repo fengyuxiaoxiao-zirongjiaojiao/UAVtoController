@@ -1,8 +1,8 @@
 /*
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 12:09:37
- * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2024-12-28 14:57:45
+ * @LastEditors: vincent_xjw@163.com
+ * @LastEditTime: 2025-01-17 20:36:49
  * @FilePath: /UAVtoController/src/Comm/SerialLink.hpp
  * @Description: 
  */
@@ -18,7 +18,7 @@
 class SerialLink : public itas109::CSerialPortListener , public LinkInterface
 {
 public:
-    SerialLink(ProtocolInterface *protocol);
+    SerialLink(ProtocolInterface *protocol, LinkConfigure *config);
     ~SerialLink();
 
     bool open(const std::string &portName, int baudrate = 57600, itas109::Parity parity = itas109::ParityNone, itas109::DataBits dataBits = itas109::DataBits8, itas109::StopBits stopBits = itas109::StopOne);

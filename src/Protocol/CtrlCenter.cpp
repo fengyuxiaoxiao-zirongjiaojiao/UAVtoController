@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 21:52:35
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-16 18:35:05
+ * @LastEditTime: 2025-01-16 19:50:32
  * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.cpp
  * @Description: 
  */
@@ -285,7 +285,7 @@ void ctrl_center_msg_position_pack(double longitude, double latitude, double alt
     double64ToBeBytes(altitude, message.payload, &index);
 #endif
     message.checkSum = 0;
-    message.tail = 0x3F19;
+    message.tail = CTRL_CENTER_MSG_TAIL;
 }
 
 void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_center_message_t &message)
@@ -336,7 +336,7 @@ void ctrl_center_msg_sys_status_pack(ctrl_center_sys_status_t sysStatus, ctrl_ce
     message.payload[index++] = sysStatus.commandAck;
 #endif
     message.checkSum = 0;
-    message.tail = 0x3F19;
+    message.tail = CTRL_CENTER_MSG_TAIL;
 }
 
 void ctrl_center_msg_power_pack(uint16_t power, ctrl_center_message_t &message)
@@ -351,7 +351,7 @@ void ctrl_center_msg_power_pack(uint16_t power, ctrl_center_message_t &message)
     uint16ToBeBytes(power, message.payload, &index);
 #endif
     message.checkSum = 0;
-    message.tail = 0x3F19;
+    message.tail = CTRL_CENTER_MSG_TAIL;
 }
 
 int ctrl_center_msg_to_send_buffer(uint8_t *buf, const ctrl_center_message_t &message)
@@ -368,8 +368,14 @@ int ctrl_center_msg_to_send_buffer(uint8_t *buf, const ctrl_center_message_t &me
     memcpy(buf+index, message.payload, message.lenght - 8); 
     index += message.lenght - 8;
     buf[index++] = checkSum(buf + 2, index-2);
-    buf[index++] = message.tail & 0xFF;
-    buf[index++] = (message.tail >> 8) & 0xFF;
+
+#ifdef THIS_LITTLE_ENDIAN
+    uint16ToLeBytes(message.tail, buf, &index);
+#else
+    uint16ToBeBytes(message.tail, buf, &index);
+#endif
+    // buf[index++] = message.tail & 0xFF;
+    // buf[index++] = (message.tail >> 8) & 0xFF;
     return index;
 }
 
@@ -412,7 +418,12 @@ bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_s
     case CTRL_CENTER_PARSE_STATE_GOT_LENGTH1:
     {
         status.state = CTRL_CENTER_PARSE_STATE_GOT_LENGTH2;
+#ifdef THIS_LITTLE_ENDIAN
         msg->lenght |= (c << 8) & 0xFF00;
+#else
+        msg->lenght = ((msg->lenght << 8) & 0xFF00) & c;
+#endif
+        
         status.pack_index = 0;
         status.pack_len = msg->lenght - 8;
     }
@@ -437,8 +448,13 @@ bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_s
         msg->checkSum = c;
         uint8_t buf[261] = {0};
         int len = status.pack_len + 3;
+#ifdef THIS_LITTLE_ENDIAN
         buf[0] = msg->lenght & 0xFF;
         buf[1] = (msg->lenght >> 8) & 0xFF;
+#else
+        buf[0] = (msg->lenght >> 8) & 0xFF;
+        buf[1] = msg->lenght & 0xFF;
+#endif
         buf[2] = msg->type;
         memcpy(buf+3, msg->payload, len);
         uint8_t crc = checkSum(buf, len);
@@ -453,7 +469,14 @@ bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_s
     {
         status.state = CTRL_CENTER_PARSE_STATE_GOT_TAIL1;
         msg->tail = c;
-        if (c != 0x19) {
+
+        uint8_t tailCh = 0;
+#ifdef THIS_LITTLE_ENDIAN
+        tailCh = uint16_t(CTRL_CENTER_MSG_TAIL) & 0xFF;
+#else
+        tailCh = (uint16_t(CTRL_CENTER_MSG_TAIL) >> 8) & 0xFF;
+#endif
+        if (c != tailCh) {
             status.pack_len = 0;
             status.pack_index = 0;
             status.state = CTRL_CENTER_PARSE_STATE_IDLE;
@@ -462,8 +485,16 @@ bool ctrl_center_parse_char(uint8_t c, ctrl_center_message_t *msg, ctrl_center_s
     case CTRL_CENTER_PARSE_STATE_GOT_TAIL1:
     {
         status.state = CTRL_CENTER_PARSE_STATE_GOT_TAIL1;
+
+        uint8_t tailCh = 0;
+#ifdef THIS_LITTLE_ENDIAN
         msg->tail |= (c << 8) & 0xFF00;
-        if (c == 0x3F) {
+        tailCh = uint16_t(CTRL_CENTER_MSG_TAIL) & 0xFF;
+#else
+        msg->tail = ((msg->tail << 8) & 0xFF00) | c;
+        tailCh = (uint16_t(CTRL_CENTER_MSG_TAIL) >> 8) & 0xFF;
+#endif
+        if (c != tailCh) {
             status.pack_len = 0;
             status.pack_index = 0;
             return true;

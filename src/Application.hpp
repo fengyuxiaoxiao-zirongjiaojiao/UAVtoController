@@ -1,8 +1,8 @@
 /*
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 10:39:34
- * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-16 16:51:51
+ * @LastEditors: vincent_xjw@163.com
+ * @LastEditTime: 2025-01-19 23:35:58
  * @FilePath: /UAVtoController/src/Application.hpp
  * @Description: 
  */
@@ -47,20 +47,17 @@ public:
 
     FlightModeInterface *createFlightModeInterface();
     bool armed() { return _armed; }
-    void setArmed(bool armed) {}
+    void setArmed(bool armed);
     bool isHeartbeatLost();
-    
+
     /**
      * 接收来自指控的数据
     */
     virtual void onCtrlCenterMessageReceive(const ctrl_center_message_t &message) override;
 
-    std::string argUdpServerIP() { return _argUdpServerIP; }
-    int argUdpServerPort() { return _argUdpServerPort; }
-    int argUdpLocalPort() { return _argUdpLocalPort; }
-    bool argUdpIsBindLocalPort() { return _argUdpIsBindLocalPort; }
-
     uint64_t getCurrentMs();
+    uint64_t getCurrentMicroSec();
+
 private:
     // 飞机 mavlink
     void _sendHeartbeat();
@@ -69,13 +66,18 @@ private:
     void _sendMavCommand(MAV_CMD command, float param1 = 0.0f, float param2 = 0.0f, float param3 = 0.0f, float param4 = 0.0f, float param5 = 0.0f, float param6 = 0.0f, float param7 = 0.0f);
     // void _sendSetPositionTargetGlobalInt();
     void _guidedTakeoff(float relAltitude);
+    void _requestHomePosition();
+    void _setOffboardMode(float height);
     void _handleHeartbeat(const mavlink_message_t &msg);
     void _handleSysStatus(const mavlink_message_t &msg);
     void _handleLocalPositionNED(const mavlink_message_t &msg);
     void _handleRawIMU(const mavlink_message_t &msg);
     void _handlePositionTargetLocalNED(const mavlink_message_t &msg);
     void _handleHilStateQuateRnion(const mavlink_message_t &msg);
-    
+    void _handleHomePosition(const mavlink_message_t &msg);
+    void _handlePing(const mavlink_message_t &msg);
+    void _handleStatustext(const mavlink_message_t &msg);
+
     // 指控
     void _sendPositionTOCtrlCenter();
     void _sendSysStatusTOCtrlCenter();
@@ -90,13 +92,14 @@ private:
 private:
     bool _quit = false;
 
-    SerialLink *_serialLink;
-    std::string _argSerialPort = "/dev/ttyS0";
-    int _argBaudRate = 115200;
-    
+    LinkInterface *_vehicleLink;
+    LinkConfigure _vehicleLinkConfig;
+
     ProtocolMavlink *_mavlink;
     uint8_t _targetSystemId;
     uint8_t _targetComponentId;
+    uint8_t _systemId = 255; // 1
+    uint8_t _componentId = MAV_COMP_ID_MISSIONPLANNER; // MAV_COMP_ID_UDP_BRIDGE;
     uint64_t _bootTimeMs;
     bool _armed = false;
     uint8_t _base_mode = 0;     ///< base_mode from HEARTBEAT
@@ -117,6 +120,9 @@ private:
     double _longitude = 0; // 经度
     double _altitude = 0; // 绝对高度
     double _relativeAltitude = 0; // 相对高度
+    double _homeLatitude;
+    double _homeLongitude;
+    double _homeAltitude = std::numeric_limits<float>::quiet_NaN(); // home点绝对高度
     // 姿态信息
     float _pitch = 0; // 俯仰
     float _roll = 0;  // 横滚
@@ -138,11 +144,8 @@ private:
 
 
     // 指控
-    UDPLink *_udpLink;
-    std::string _argUdpServerIP = "127.0.0.1";
-    int _argUdpServerPort = 2001;
-    int _argUdpLocalPort = 2002;
-    bool _argUdpIsBindLocalPort = true; // 是否绑定端口号
+    LinkInterface *_ctrlCenterLink;
+    LinkConfigure _ctrlCenterLinkConfig;
 
     ProtocolCtrlCenter *_ctrlCenter;
 

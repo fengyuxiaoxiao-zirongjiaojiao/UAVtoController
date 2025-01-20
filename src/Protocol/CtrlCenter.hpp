@@ -2,7 +2,7 @@
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 21:52:35
  * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-16 18:41:05
+ * @LastEditTime: 2025-01-16 19:44:51
  * @FilePath: /UAVtoController/src/Protocol/CtrlCenter.hpp
  * @Description: 
  */
@@ -39,6 +39,8 @@ int16_t int16FromLeBytes(const uint8_t* bytes, int* index);
 
 #define CTRL_CENTER_MSG_PAYLOAD_LEN_MAX   256
 #define CTRL_CENTER_MSG_FRAME_LEN_MAX   (CTRL_CENTER_MSG_PAYLOAD_LEN_MAX + 7)
+
+#define CTRL_CENTER_MSG_TAIL 0x3F19
 
 typedef enum _Protocol_type{
     CTRL_CENTER_MSG_TYPE_POSITION = 0x01,  // 位置信息

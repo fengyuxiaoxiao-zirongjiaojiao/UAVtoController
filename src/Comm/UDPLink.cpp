@@ -1,8 +1,8 @@
 /*
  * @Author: vincent vincent_xjw@163.com
  * @Date: 2024-12-28 22:59:57
- * @LastEditors: vincent vincent_xjw@163.com
- * @LastEditTime: 2025-01-16 17:07:11
+ * @LastEditors: vincent_xjw@163.com
+ * @LastEditTime: 2025-01-17 21:32:26
  * @FilePath: /UAVtoController/src/Comm/UDPLink.cpp
  * @Description: 
  */
@@ -13,7 +13,7 @@
 
 std::mutex UDPLink::_mutex;
 
-UDPLink::UDPLink(ProtocolInterface *protocol) : _protocol(protocol)
+UDPLink::UDPLink(ProtocolInterface *protocol, LinkConfigure *config) : LinkInterface(config), _protocol(protocol)
 {
 }
 
@@ -73,12 +73,12 @@ void UDPLink::_readDataFunction(UDPLink *caller)
     }
 
     // 设置客户端地址和端口（绑定自己的端口）
-    if (Application::getInstance()->argUdpIsBindLocalPort()) {
+    if (_config->udpIsBindLocalPort()) {
         struct sockaddr_in server_addr, client_addr;
         memset(&client_addr, 0, sizeof(client_addr));
         client_addr.sin_family = AF_INET;
         client_addr.sin_addr.s_addr = INADDR_ANY; // 绑定到所有可用地址
-        client_addr.sin_port = htons(Application::getInstance()->argUdpLocalPort());      // 指定客户端使用的端口号（例如 9090）
+        client_addr.sin_port = htons(_config->udpLocalPort());  // 指定客户端使用的端口号（例如 9090）
 
         if (bind(_sockfd, (const struct sockaddr *)&client_addr, sizeof(client_addr)) < 0) {
             perror("客户端: 绑定端口失败");
@@ -91,10 +91,11 @@ void UDPLink::_readDataFunction(UDPLink *caller)
     // 设置服务器地址和端口
     memset(&_serverAddr, 0, sizeof(_serverAddr));
     _serverAddr.sin_family = AF_INET;
-    _serverAddr.sin_port = htons(Application::getInstance()->argUdpServerPort());
-    if (inet_pton(AF_INET, Application::getInstance()->argUdpServerIP().c_str(), &_serverAddr.sin_addr) <= 0) {
+    _serverAddr.sin_port = htons(_config->udpServerPort());
+    if (inet_pton(AF_INET, _config->udpServerIP().c_str(), &_serverAddr.sin_addr) <= 0)
+    {
         perror("客户端: 无效地址或地址不支持");
-        Logger::getInstance()->log(LOGLEVEL_FATAL, "客户端: 无效地址或地址不支持 " + std::string("IP:") + Application::getInstance()->argUdpServerIP() + std::string(" port:") + std::to_string(Application::getInstance()->argUdpServerPort()) );
+        Logger::getInstance()->log(LOGLEVEL_FATAL, "客户端: 无效地址或地址不支持 " + std::string("IP:") + _config->udpServerIP() + std::string(" port:") + std::to_string(_config->udpServerPort()));
         close(_sockfd);
         exit(EXIT_FAILURE);
     }
