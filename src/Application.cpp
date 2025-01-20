@@ -353,7 +353,7 @@ void Application::onCtrlCenterMessageReceive(const ctrl_center_message_t &messag
             //     _setFlightMode(_flightModeInterface->hoverMode());
             // }
             // 起飞到指定高度
-            _guidedTakeoff(command_long.position_1.altitude - _homeAltitude);
+            _guidedTakeoff(command_long.height);
         }
         else if (command_long.mode == 8)
         { // 8-遥操作模式
